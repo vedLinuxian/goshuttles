@@ -168,7 +168,7 @@ function RegisterFormContent() {
   );
 }
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans">
       {/* Background glow orbs */}
@@ -193,9 +193,7 @@ export default function RegisterPage() {
           </CardHeader>
 
           <CardContent className="space-y-5">
-            <Suspense fallback={<div className="text-center text-xs text-slate-500 py-8">Loading registration form...</div>}>
-              <RegisterFormContent />
-            </Suspense>
+            <RegisterFormContent />
           </CardContent>
         </Card>
 
@@ -250,5 +248,13 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#070b14] text-slate-100 flex items-center justify-center p-4">Loading registration form...</div>}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }

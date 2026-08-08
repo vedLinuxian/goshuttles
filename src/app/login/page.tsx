@@ -194,7 +194,7 @@ function LoginFormContent() {
   );
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans">
       {/* Background glow orbs */}
@@ -217,9 +217,7 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-5">
-          <Suspense fallback={<div className="text-center text-xs text-slate-500 py-8">Loading sign-in deck...</div>}>
-            <LoginFormContent />
-          </Suspense>
+          <LoginFormContent />
 
           <div className="pt-2 border-t border-slate-800 text-center">
             <p className="text-xs text-slate-400">
@@ -232,5 +230,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#070b14] text-slate-100 flex items-center justify-center p-4">Loading sign-in deck...</div>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
