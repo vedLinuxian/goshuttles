@@ -30,15 +30,15 @@ function getLocalDateString(d: Date = new Date()): string {
 }
 
 export default async function HomePage() {
-  const session = await auth();
+  const session = await auth().catch(() => null);
   const now = new Date();
   const today = getLocalDateString(now);
   const tomorrowDate = new Date(now);
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrow = getLocalDateString(tomorrowDate);
   
-  const [locations, upcomingTrips] = await Promise.all([
-    db.location.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  const [locationsRaw, upcomingTripsRaw] = await Promise.all([
+    db.location.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }).catch(() => []),
     db.trip.findMany({
       where: {
         status: "SCHEDULED",
@@ -56,8 +56,16 @@ export default async function HomePage() {
       },
       orderBy: { startTime: "asc" },
       take: 8,
-    }),
+    }).catch(() => []),
   ]);
+
+  const locations = locationsRaw.length > 0 ? locationsRaw : [
+    { id: "loc-lkn", name: "Lucknow" },
+    { id: "loc-ayd", name: "Ayodhya" },
+    { id: "loc-vns", name: "Varanasi" },
+    { id: "loc-gkp", name: "Gorakhpur" },
+  ];
+  const upcomingTrips = upcomingTripsRaw;
 
   const initialRides: RideSummary[] = upcomingTrips.map((trip) => {
     const prices = trip.seats.map((seat) => Number(seat.price)).filter(Number.isFinite);
