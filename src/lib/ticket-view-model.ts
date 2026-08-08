@@ -20,7 +20,7 @@ export type PrintableTicketData = {
   vehicleModel: string;
   qrValue: string;
   groupSeats?: string[];
-  groupRoster?: Array<{ seatNumber: string; passengerName: string }>;
+  groupRoster?: Array<{ seatNumber: string; passengerName: string; guestAge?: number | null; guestGender?: string | null }>;
   totalGroupFare?: number;
 };
 
@@ -48,7 +48,7 @@ export function toPrintableTicketData(ticket: {
     };
   };
   groupSeats?: string[];
-  groupRoster?: Array<{ seatNumber: string; passengerName: string }>;
+  groupRoster?: Array<{ seatNumber: string; passengerName: string; guestAge?: number | null; guestGender?: string | null }>;
   totalGroupFare?: number;
 }): PrintableTicketData {
   return {

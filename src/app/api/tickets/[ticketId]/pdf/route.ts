@@ -1,10 +1,7 @@
 import { auth } from "@/auth";
 import { getTicketById } from "@/lib/ticket-service";
 import { toPrintableTicketData } from "@/lib/ticket-view-model";
-import { ticketHtml } from "@/lib/ticket-html";
-import chromium from "@sparticuz/chromium";
-import puppeteer from "puppeteer-core";
-import QRCode from "qrcode";
+import { generateTicketPdfBuffer } from "@/lib/pdf-generator";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -32,40 +29,13 @@ export async function GET(
   }
 
   const printable = toPrintableTicketData(ticket);
-  const qrDataUrl = await QRCode.toDataURL(printable.qrValue, { errorCorrectionLevel: "H", margin: 1, width: 640 });
-  const html = ticketHtml(printable, qrDataUrl);
+  const pdfBuffer = generateTicketPdfBuffer(printable);
 
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
-  try {
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: process.env.CHROMIUM_PATH || (await chromium.executablePath()),
-      headless: true,
-    });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "load" });
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      preferCSSPageSize: true,
-      margin: { top: "0", right: "0", bottom: "0", left: "0" },
-    });
-    return new NextResponse(Buffer.from(pdf), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${printable.ticketNumber}.pdf"`,
-        "Cache-Control": "private, no-store",
-      },
-    });
-  } catch (error) {
-    console.warn("[GET /api/tickets/[ticketId]/pdf] Puppeteer PDF fallback to HTML print document:", error);
-    return new NextResponse(html, {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "private, no-store",
-      },
-    });
-  } finally {
-    await browser?.close();
-  }
+  return new NextResponse(new Uint8Array(pdfBuffer), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="GoShuttles-Pass-${printable.ticketNumber}.pdf"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 }

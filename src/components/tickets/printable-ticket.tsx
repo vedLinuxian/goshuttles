@@ -65,16 +65,27 @@ export function PrintableTicket({ ticket }: { ticket: PrintableTicketData }) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Info
-            label="Passenger Roster"
-            value={
-              ticket.groupRoster && ticket.groupRoster.length > 1
-                ? ticket.groupRoster.map((g) => `${g.passengerName} (${g.seatNumber})`).join(", ")
-                : ticket.passengerPhone
-                ? `${ticket.passengerName} · ${ticket.passengerPhone}`
-                : ticket.passengerName
-            }
-          />
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-3">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Passenger Roster &amp; Age</p>
+            {ticket.groupRoster && ticket.groupRoster.length > 0 ? (
+              <div className="space-y-1">
+                {ticket.groupRoster.map((g, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {g.passengerName} {g.guestAge ? `(${g.guestAge} yrs)` : ""}
+                    </span>
+                    <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
+                      Seat {g.seatNumber}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                {ticket.passengerName} {ticket.passengerPhone ? `· ${ticket.passengerPhone}` : ""}
+              </p>
+            )}
+          </div>
           <Info label="Driver" value={`${ticket.driverName}${ticket.driverPhone ? ` · ${ticket.driverPhone}` : ""}`} />
           <Info label="Vehicle" value={`${ticket.vehicleRegistration} · ${ticket.vehicleModel}`} />
           <Info label="Pass Reference ID" value={ticket.ticketNumber} mono />

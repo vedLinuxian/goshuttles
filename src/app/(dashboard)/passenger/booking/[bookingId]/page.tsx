@@ -58,8 +58,21 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
         </div>
 
         <div className="space-y-3 text-xs bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80">
-          <div className="flex justify-between items-center"><span className="text-slate-500 dark:text-slate-400">Seat Number</span><span className="font-extrabold text-amber-600 dark:text-amber-400 text-sm">Seat {booking.seat?.seatNumber || "N/A"}</span></div>
-          <div className="flex justify-between items-center"><span className="text-slate-500 dark:text-slate-400">Total Amount</span><span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">₹{Number(booking.totalAmount)}</span></div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 dark:text-slate-400">Assigned Seat(s)</span>
+            <span className="font-extrabold text-amber-600 dark:text-amber-400 text-sm">
+              {booking.groupSeats && booking.groupSeats.length > 1
+                ? `Seats ${booking.groupSeats.join(", ")} (${booking.groupSeats.length} Seats)`
+                : `Seat ${booking.seat?.seatNumber || "N/A"}`}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 dark:text-slate-400">Total Amount</span>
+            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
+              ₹{Number(booking.totalGroupFare || booking.totalAmount).toLocaleString("en-IN")}
+              {booking.groupSeats && booking.groupSeats.length > 1 ? " (Group Total)" : ""}
+            </span>
+          </div>
           <div className="flex justify-between items-center"><span className="text-slate-500 dark:text-slate-400">Payment Mode</span><span className="font-semibold text-slate-800 dark:text-slate-200">{booking.paymentMode}</span></div>
           <div className="flex justify-between items-center">
             <span className="text-slate-500 dark:text-slate-400">Payment Status</span>
@@ -72,21 +85,57 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
           )}
         </div>
 
-        {booking.ticket && (
-          <div className="border-t border-slate-200 dark:border-slate-800/80 pt-4 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Pass Reference</p>
-              <p className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 mt-0.5">#{booking.ticket.ticketNumber}</p>
+        {/* Passenger Roster Section with Age */}
+        <div className="space-y-2 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80">
+          <p className="text-[10px] uppercase font-extrabold tracking-wider text-slate-500 dark:text-slate-400">
+            Passenger Roster &amp; Age Details
+          </p>
+          {booking.groupRoster && booking.groupRoster.length > 0 ? (
+            <div className="space-y-1.5 divide-y divide-slate-200 dark:divide-slate-800/60">
+              {booking.groupRoster.map((g, idx) => (
+                <div key={idx} className="flex justify-between items-center text-xs pt-1.5 first:pt-0">
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{g.passengerName}</span>
+                    {g.guestAge && (
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold ml-1.5 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                        Age: {g.guestAge} yrs
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                    Seat {g.seatNumber}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="no-print flex items-center gap-2">
+          ) : (
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-900 dark:text-slate-100">
+                {booking.guestName || booking.user?.name || "Passenger"}
+                {booking.guestAge ? ` (Age: ${booking.guestAge} yrs)` : ""}
+              </span>
+              <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
+                Seat {booking.seat?.seatNumber || "N/A"}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {booking.ticket && (
+          <div className="border-t border-slate-200 dark:border-slate-800/80 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Pass Reference</p>
+                <p className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 mt-0.5">#{booking.ticket.ticketNumber}</p>
+              </div>
               <Link
                 href={`/passenger/ticket/${booking.ticket.id}`}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold shadow-md glow-amber flex items-center gap-1.5 transition-all"
               >
                 <Ticket className="h-3.5 w-3.5" /> View Digital Pass
               </Link>
-              <TicketActions ticketId={booking.ticket.id} />
             </div>
+            <TicketActions ticketId={booking.ticket.id} />
           </div>
         )}
 

@@ -96,14 +96,19 @@ export async function getTicketById(ticketId: string) {
       tripId: ticket.booking.tripId,
       status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] },
     },
-    include: { seat: true },
+    include: {
+      seat: true,
+      user: { select: { name: true, passengerProfile: { select: { age: true, gender: true } } } },
+    },
     orderBy: { createdAt: "asc" },
   });
 
   const groupSeats = companionBookings.map((b) => b.seat?.seatNumber).filter(Boolean) as string[];
   const groupRoster = companionBookings.map((b) => ({
     seatNumber: b.seat?.seatNumber || "",
-    passengerName: b.guestName || "Passenger",
+    passengerName: b.guestName || b.user?.name || "Passenger",
+    guestAge: b.guestAge || b.user?.passengerProfile?.age || null,
+    guestGender: b.guestGender || b.user?.passengerProfile?.gender || null,
   }));
   const totalGroupFare = companionBookings.reduce((sum, b) => sum + Number(b.totalAmount), 0);
 

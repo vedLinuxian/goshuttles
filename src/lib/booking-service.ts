@@ -809,16 +809,54 @@ export async function releaseExpiredLocks() {
 // ============================================================
 
 export async function getBookingById(bookingId: string) {
-  return db.booking.findUnique({
+  const booking = await db.booking.findUnique({
     where: { id: bookingId },
     include: {
       trip: { include: { source: true, destination: true, vehicle: true, driver: true } },
       seat: true,
       ticket: true,
       paymentVerification: true,
-      user: { select: { id: true, name: true, phone: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          passengerProfile: { select: { age: true, gender: true } },
+        },
+      },
     },
   });
+
+  if (!booking) return null;
+
+  const companionBookings = await db.booking.findMany({
+    where: {
+      userId: booking.userId,
+      tripId: booking.tripId,
+      status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] },
+    },
+    include: {
+      seat: true,
+      user: { select: { name: true, passengerProfile: { select: { age: true, gender: true } } } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const groupSeats = companionBookings.map((b) => b.seat?.seatNumber).filter(Boolean) as string[];
+  const groupRoster = companionBookings.map((b) => ({
+    seatNumber: b.seat?.seatNumber || "",
+    passengerName: b.guestName || b.user?.name || "Passenger",
+    guestAge: b.guestAge || b.user?.passengerProfile?.age || null,
+    guestGender: b.guestGender || b.user?.passengerProfile?.gender || null,
+  }));
+  const totalGroupFare = companionBookings.reduce((sum, b) => sum + Number(b.totalAmount), 0);
+
+  return {
+    ...booking,
+    groupSeats: groupSeats.length > 0 ? groupSeats : [booking.seat?.seatNumber || "Unassigned"],
+    groupRoster,
+    totalGroupFare: totalGroupFare > 0 ? totalGroupFare : Number(booking.totalAmount),
+  };
 }
 
 export async function getPassengerBookings(userId: string) {

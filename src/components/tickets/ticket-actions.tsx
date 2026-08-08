@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Printer, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui";
 
 export function TicketActions({ ticketId }: { ticketId: string }) {
@@ -30,22 +30,32 @@ export function TicketActions({ ticketId }: { ticketId: string }) {
   }
 
   return (
-    <div className="no-print flex w-full flex-wrap gap-3">
+    <div className="no-print flex w-full flex-wrap sm:flex-nowrap gap-3">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => window.print()}
+        className="w-full sm:w-auto gap-2 font-bold cursor-pointer border-slate-700 hover:bg-slate-800 text-slate-200"
+      >
+        <Printer className="h-4 w-4" />
+        Print Pass
+      </Button>
+
       <Button
         type="button"
         disabled={downloading}
         onClick={downloadPdf}
-        className="w-full gap-2 font-extrabold shadow-md glow-amber cursor-pointer"
+        className="w-full sm:flex-1 gap-2 font-extrabold shadow-md glow-amber cursor-pointer bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950"
       >
         {downloading ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Generating Pass PDF...
+            Generating PDF...
           </>
         ) : (
           <>
             <Download className="h-4 w-4" />
-            Download Pass PDF
+            Download PDF
           </>
         )}
       </Button>
