@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { Search, Ticket, ExternalLink, MapPin, Clock, CheckCircle2, Wallet, ArrowRight, Shield } from "lucide-react";
+import { groupBookings } from "@/lib/booking-grouping";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,27 @@ export default async function PassengerDashboardPage() {
     NO_SHOW: { label: "No Show", cls: "badge-muted" },
   };
 
+  const rawRecentBookings = recentBookings.map((b) => ({
+    id: b.id,
+    userId: b.userId,
+    status: b.status,
+    paymentMode: "CASH" as const,
+    paymentStatus: "PENDING" as const,
+    totalAmount: String(b.totalAmount),
+    createdAt: b.createdAt.toISOString(),
+    guestName: b.guestName || "Passenger",
+    seatNumber: b.seat?.seatNumber || "Unassigned",
+    trip: {
+      id: b.trip.id,
+      startTime: b.trip.startTime.toISOString(),
+      source: b.trip.source.name,
+      destination: b.trip.destination.name,
+    },
+    ticket: b.ticket ? { id: b.ticket.id, ticketNumber: "PASS", status: "ISSUED" } : null,
+  }));
+
+  const groupedRecentBookings = groupBookings(rawRecentBookings);
+
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 pb-10">
       {/* Welcome Banner */}
@@ -84,12 +106,12 @@ export default async function PassengerDashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Bookings</p>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Trips</p>
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
               <Ticket className="h-4 w-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white mt-2">{totalBookings}</p>
+          <p className="text-2xl font-black text-white mt-2">{groupedRecentBookings.length || totalBookings}</p>
         </div>
 
         <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg">
@@ -138,7 +160,7 @@ export default async function PassengerDashboardPage() {
               </Link>
             </div>
 
-            {recentBookings.length === 0 ? (
+            {groupedRecentBookings.length === 0 ? (
               <div className="p-10 text-center">
                 <Ticket className="h-10 w-10 text-slate-600 mx-auto mb-3" />
                 <p className="text-sm font-semibold text-white">No active bookings yet</p>
@@ -148,17 +170,16 @@ export default async function PassengerDashboardPage() {
               </div>
             ) : (
               <div className="divide-y divide-slate-800/40">
-                {recentBookings.map((b) => {
+                {groupedRecentBookings.map((b) => {
                   const st = statusMap[b.status] ?? { label: b.status, cls: "badge-muted" };
                   return (
                     <div key={b.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-800/30 transition-colors gap-4">
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-white truncate">
-                          {b.trip.source.name} → {b.trip.destination.name}
+                          {b.trip.source} → {b.trip.destination}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-1">
-                          Seat <span className="font-mono text-slate-300 font-bold">{b.seat?.seatNumber}</span> &nbsp;·&nbsp;
-                          {/* Fixed date formatting bug */}
+                          Seats <span className="font-mono text-amber-400 font-bold">{b.seatNumberDisplay}</span> &nbsp;·&nbsp; ₹{b.totalAmount} &nbsp;·&nbsp;
                           {new Date(b.trip.startTime).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                         </p>
                       </div>

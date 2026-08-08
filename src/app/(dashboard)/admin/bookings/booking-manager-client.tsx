@@ -52,13 +52,14 @@ export type BookingItem = {
   cancellationReason: string | null;
   passengerName: string;
   passengerPhone: string | null;
+  guestRoster?: Array<{ name: string; seatNumber: string }>;
   trip: {
     id: string;
     startTime: string;
     source: string;
     destination: string;
     driverId: string | null;
-    driverName: string;
+    driverName: string | null;
   };
   seatNumber: string;
   ticket: { id: string; ticketNumber: string; status: string } | null;

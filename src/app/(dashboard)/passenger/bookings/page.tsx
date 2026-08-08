@@ -7,6 +7,7 @@ import PaginationControls from "@/components/ui/pagination";
 import SearchBar from "@/components/ui/search-bar";
 import { Ticket, Search, ArrowRight } from "lucide-react";
 import { PassengerBookingsClient, type PassengerBookingItem } from "./passenger-bookings-client";
+import { groupBookings } from "@/lib/booking-grouping";
 
 const PAGE_SIZE = 10;
 
@@ -113,8 +114,9 @@ export default async function MyBookingsPage({
     }),
   ]);
 
-  const bookingItems: PassengerBookingItem[] = bookings.map((b) => ({
+  const rawBookingItems = bookings.map((b) => ({
     id: b.id,
+    userId: b.userId,
     status: b.status,
     paymentMode: b.paymentMode,
     paymentStatus: b.paymentStatus,
@@ -136,6 +138,19 @@ export default async function MyBookingsPage({
           status: b.ticket.status,
         }
       : null,
+  }));
+
+  const groupedBookingItems = groupBookings(rawBookingItems).map((g) => ({
+    id: g.id,
+    status: g.status,
+    paymentMode: g.paymentMode,
+    paymentStatus: g.paymentStatus,
+    totalAmount: g.totalAmount,
+    createdAt: g.createdAt,
+    guestName: g.passengerName,
+    seatNumber: g.seatNumberDisplay,
+    trip: g.trip,
+    ticket: g.ticket,
   }));
 
   return (
@@ -168,7 +183,7 @@ export default async function MyBookingsPage({
         />
         <div className="flex gap-2">
           <FilterLink active={statusFilter === ""} href="?">
-            All ({totalCount})
+            All ({groupedBookingItems.length})
           </FilterLink>
           <FilterLink active={statusFilter === "upcoming"} href="?status=upcoming">
             Upcoming ({upcomingCount})
@@ -180,7 +195,7 @@ export default async function MyBookingsPage({
       </div>
 
       {/* Empty State vs Table View */}
-      {bookings.length === 0 ? (
+      {groupedBookingItems.length === 0 ? (
         <div className="glass-card-dark rounded-3xl border border-slate-800/80 shadow-2xl p-12 text-center space-y-4 glow-amber">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
             <Ticket className="h-7 w-7 text-amber-400" />
@@ -205,7 +220,7 @@ export default async function MyBookingsPage({
         </div>
       ) : (
         <PassengerBookingsClient
-          bookings={bookingItems}
+          bookings={groupedBookingItems}
           sortField={sortField}
           sortOrder={sortOrder}
         />
