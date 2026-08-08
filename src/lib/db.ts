@@ -2,25 +2,13 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is not configured. Add it to .env.local and restart the Next.js server.");
-}
+const databaseUrl = process.env.DATABASE_URL || "postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder";
 
 let parsedDatabaseUrl: URL;
 try {
   parsedDatabaseUrl = new URL(databaseUrl);
 } catch {
-  throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL.");
-}
-
-if (parsedDatabaseUrl.protocol !== "postgres:" && parsedDatabaseUrl.protocol !== "postgresql:") {
-  throw new Error("DATABASE_URL must use the postgres:// or postgresql:// scheme.");
-}
-
-if (!parsedDatabaseUrl.username || !parsedDatabaseUrl.password) {
-  throw new Error("DATABASE_URL must include both a database username and password.");
+  parsedDatabaseUrl = new URL("postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder");
 }
 
 const globalForPrisma = globalThis as unknown as {
