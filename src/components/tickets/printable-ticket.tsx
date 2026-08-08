@@ -52,13 +52,29 @@ export function PrintableTicket({ ticket }: { ticket: PrintableTicketData }) {
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Info label="Scheduled Departure" value={formatDate(ticket.departureAt)} />
-          <Info label="Seat" value={`Seat ${ticket.seatNumber}`} accent />
-          <Info label="Fare" value={`₹${Number(ticket.ticketPrice).toLocaleString("en-IN")}`} />
+          <Info
+            label="Seat(s)"
+            value={ticket.groupSeats && ticket.groupSeats.length > 1 ? `Seats ${ticket.groupSeats.join(", ")} (${ticket.groupSeats.length} Seats)` : `Seat ${ticket.seatNumber}`}
+            accent
+          />
+          <Info
+            label="Fare"
+            value={ticket.totalGroupFare ? `₹${Number(ticket.totalGroupFare).toLocaleString("en-IN")}` : `₹${Number(ticket.ticketPrice).toLocaleString("en-IN")}`}
+          />
           <Info label="Payment" value={`${ticket.paymentMode} · ${ticket.paymentStatus}`} />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Info label="Passenger" value={ticket.passengerPhone ? `${ticket.passengerName} · ${ticket.passengerPhone}` : ticket.passengerName} />
+          <Info
+            label="Passenger Roster"
+            value={
+              ticket.groupRoster && ticket.groupRoster.length > 1
+                ? ticket.groupRoster.map((g) => `${g.passengerName} (${g.seatNumber})`).join(", ")
+                : ticket.passengerPhone
+                ? `${ticket.passengerName} · ${ticket.passengerPhone}`
+                : ticket.passengerName
+            }
+          />
           <Info label="Driver" value={`${ticket.driverName}${ticket.driverPhone ? ` · ${ticket.driverPhone}` : ""}`} />
           <Info label="Vehicle" value={`${ticket.vehicleRegistration} · ${ticket.vehicleModel}`} />
           <Info label="Pass Reference ID" value={ticket.ticketNumber} mono />

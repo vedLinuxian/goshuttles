@@ -147,6 +147,7 @@ export async function finalizePassengerBooking(params: {
         guestName: params.guestName,
         guestAge: params.guestAge ?? 25,
         guestGender: params.guestGender ?? "Other",
+        status: "CONFIRMED",
       },
     });
 
@@ -156,10 +157,14 @@ export async function finalizePassengerBooking(params: {
         throw new Error("12-digit UTR / Payment reference number is mandatory for ONLINE payments.");
       }
       const existingUtr = await tx.paymentVerification.findFirst({
-        where: { utrNumber: cleanUtr, bookingId: { not: booking.id } },
+        where: {
+          utrNumber: cleanUtr,
+          bookingId: { not: booking.id },
+          booking: { userId: { not: params.userId } },
+        },
       });
       if (existingUtr) {
-        throw new Error("This UTR / Payment Reference Number has already been submitted for another booking.");
+        throw new Error("This UTR / Payment Reference Number has already been submitted for another user's booking.");
       }
 
       await tx.paymentVerification.upsert({
@@ -174,6 +179,19 @@ export async function finalizePassengerBooking(params: {
         create: { bookingId: booking.id, utrNumber: cleanUtr, status: "PENDING" },
       });
     }
+
+    // Auto-issue digital boarding pass so ticket pass is immediately available to passenger & driver
+    await issueTicket(tx, {
+      bookingId: booking.id,
+      passengerName: params.guestName,
+      passengerPhone: null,
+      tripDate: booking.trip.startTime,
+      source: booking.trip.source.name,
+      destination: booking.trip.destination.name,
+      seatNumber: booking.seat.seatNumber,
+      ticketPrice: Number(booking.totalAmount),
+      status: "ISSUED",
+    });
 
     return updated;
   });

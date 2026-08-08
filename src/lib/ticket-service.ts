@@ -75,7 +75,7 @@ export async function issueTicket(tx: TransactionClient, params: IssueTicketPara
 
 export async function getTicketById(ticketId: string) {
   if (!ticketId) return null;
-  return db.ticket.findUnique({
+  const ticket = await db.ticket.findUnique({
     where: { id: ticketId },
     include: {
       booking: {
@@ -87,6 +87,32 @@ export async function getTicketById(ticketId: string) {
       },
     },
   });
+
+  if (!ticket) return null;
+
+  const companionBookings = await db.booking.findMany({
+    where: {
+      userId: ticket.booking.userId,
+      tripId: ticket.booking.tripId,
+      status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] },
+    },
+    include: { seat: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const groupSeats = companionBookings.map((b) => b.seat?.seatNumber).filter(Boolean) as string[];
+  const groupRoster = companionBookings.map((b) => ({
+    seatNumber: b.seat?.seatNumber || "",
+    passengerName: b.guestName || "Passenger",
+  }));
+  const totalGroupFare = companionBookings.reduce((sum, b) => sum + Number(b.totalAmount), 0);
+
+  return {
+    ...ticket,
+    groupSeats: groupSeats.length > 0 ? groupSeats : [ticket.seatNumber],
+    groupRoster,
+    totalGroupFare: totalGroupFare > 0 ? totalGroupFare : Number(ticket.ticketPrice),
+  };
 }
 
 export async function getPassengerTickets(userId: string) {

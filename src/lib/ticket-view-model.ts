@@ -19,6 +19,9 @@ export type PrintableTicketData = {
   vehicleRegistration: string;
   vehicleModel: string;
   qrValue: string;
+  groupSeats?: string[];
+  groupRoster?: Array<{ seatNumber: string; passengerName: string }>;
+  totalGroupFare?: number;
 };
 
 export function toPrintableTicketData(ticket: {
@@ -44,6 +47,9 @@ export function toPrintableTicketData(ticket: {
       vehicle: { regNumber: string; modelName: string } | null;
     };
   };
+  groupSeats?: string[];
+  groupRoster?: Array<{ seatNumber: string; passengerName: string }>;
+  totalGroupFare?: number;
 }): PrintableTicketData {
   return {
     id: ticket.id,
@@ -66,5 +72,8 @@ export function toPrintableTicketData(ticket: {
     vehicleRegistration: ticket.booking.trip.vehicle?.regNumber || "Unassigned vehicle",
     vehicleModel: ticket.booking.trip.vehicle?.modelName || "",
     qrValue: `GOSHUTTLES:TICKET:${ticket.ticketNumber}:${ticket.id}`,
+    groupSeats: ticket.groupSeats,
+    groupRoster: ticket.groupRoster,
+    totalGroupFare: ticket.totalGroupFare,
   };
 }
