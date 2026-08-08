@@ -247,3 +247,68 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .animate-spin-slow {
   animation: spin-slow 12s linear infinite;
 }
+
+/* Print Optimization: Hide headers, sidebars, breadcrumbs, buttons, and navigation elements */
+@media print {
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide app chrome, headers, sidebar navigation, breadcrumbs, action buttons, and back links */
+  header,
+  footer,
+  aside,
+  nav,
+  .no-print,
+  [data-sidebar],
+  button,
+  a[href*="/passenger/bookings"],
+  a[href*="/passenger/discover"] {
+    display: none !important;
+  }
+
+  /* Hide main wrapper margins/paddings when printing ticket surface */
+  body * {
+    visibility: hidden;
+  }
+
+  .ticket-print-surface,
+  .ticket-print-surface * {
+    visibility: visible;
+  }
+
+  .ticket-print-surface {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: 1.5px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .ticket-print-section {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .ticket-route,
+  .ticket-qr {
+    border-color: #cbd5e1 !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
+  }
+}

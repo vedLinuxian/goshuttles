@@ -29,7 +29,7 @@ export async function GET(
   }
 
   const printable = toPrintableTicketData(ticket);
-  const pdfBuffer = generateTicketPdfBuffer(printable);
+  const pdfBuffer = await generateTicketPdfBuffer(printable);
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {
