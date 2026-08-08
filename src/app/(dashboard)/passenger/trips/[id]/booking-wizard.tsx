@@ -42,16 +42,44 @@ export function BookingWizard({
 }: BookingWizardProps) {
   const router = useRouter();
 
-  // Wizard Step: 1 = Pick Seat, 2 = Passenger Details & Lock, 3 = Payment & Pass
-  const initialSeat = trip.seats.find((s) => s.seatNumber === initialSelectedSeatNumber && s.status === "AVAILABLE");
-  const [selectedSeat, setSelectedSeat] = useState<Seat | null>(initialSeat || null);
-  const [step, setStep] = useState<1 | 2 | 3>(initialSeat ? 2 : 1);
+  // Parse comma-separated initial seat numbers (e.g. "F1,M1,M2" or "F1")
+  const initialSeatNumbers = (initialSelectedSeatNumber || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  // Passenger Form State
-  const [passengerName, setPassengerName] = useState(userName || "");
+  const initialSeats = trip.seats.filter(
+    (s) => initialSeatNumbers.includes(s.seatNumber) && s.status === "AVAILABLE"
+  );
+
+  const [selectedSeats, setSelectedSeats] = useState<Seat[]>(
+    initialSeats.length > 0 ? initialSeats : []
+  );
+  const [step, setStep] = useState<1 | 2 | 3>(initialSeats.length > 0 ? 2 : 1);
+
+  // Roster state for each selected seat
+  const [guestRoster, setGuestRoster] = useState<
+    Array<{ seatNumber: string; passengerName: string; guestAge: string; guestGender: string }>
+  >([]);
+
+  // Update guest roster whenever selectedSeats changes
+  useEffect(() => {
+    setGuestRoster((prev) => {
+      return selectedSeats.map((seat, idx) => {
+        const existing = prev.find((p) => p.seatNumber === seat.seatNumber);
+        if (existing) return existing;
+        return {
+          seatNumber: seat.seatNumber,
+          passengerName: idx === 0 ? userName || "" : "",
+          guestAge: "25",
+          guestGender: "Male",
+        };
+      });
+    });
+  }, [selectedSeats, userName]);
+
+  // Primary Passenger Contact
   const [passengerPhone, setPassengerPhone] = useState(userPhone || "");
-  const [guestAge, setGuestAge] = useState<string>("25");
-  const [guestGender, setGuestGender] = useState<string>("Male");
 
   // Payment State
   const [paymentMode, setPaymentMode] = useState<"CASH" | "ONLINE">("ONLINE");
@@ -71,7 +99,7 @@ export function BookingWizard({
       setLockTimeRemaining(remaining);
       if (remaining === 0) {
         setLockedUntil(null);
-        setErrorMsg("Seat lock time expired. Please select a seat again.");
+        setErrorMsg("Seat lock time expired. Please select your seats again.");
         setStep(1);
       }
     };
@@ -82,13 +110,18 @@ export function BookingWizard({
 
   const handleSelectSeat = (seat: Seat) => {
     if (seat.status !== "AVAILABLE") return;
-    setSelectedSeat(seat);
+    setSelectedSeats((prev) => {
+      const exists = prev.some((s) => s.id === seat.id);
+      if (exists) return prev.filter((s) => s.id !== seat.id);
+      if (prev.length >= 6) return prev;
+      return [...prev, seat];
+    });
     setErrorMsg(null);
   };
 
   const handleProceedToStep2 = () => {
-    if (!selectedSeat) {
-      setErrorMsg("Please select an available seat to proceed.");
+    if (selectedSeats.length === 0) {
+      setErrorMsg("Please select at least one available seat to proceed.");
       return;
     }
     setErrorMsg(null);
@@ -97,25 +130,33 @@ export function BookingWizard({
 
   const handleLockAndProceedToStep3 = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSeat) return;
-    if (!passengerName || !passengerPhone) {
-      setErrorMsg("Passenger name and phone number are required.");
+    if (selectedSeats.length === 0) return;
+
+    for (let i = 0; i < selectedSeats.length; i++) {
+      const p = guestRoster[i];
+      if (!p || !p.passengerName.trim()) {
+        setErrorMsg(`Please enter passenger name for Seat ${selectedSeats[i].seatNumber}.`);
+        return;
+      }
+    }
+    if (!passengerPhone) {
+      setErrorMsg("Contact phone number is required.");
       return;
     }
 
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    // Call Lock Seat Server Action
-    const res = await lockSeatAction(trip.id, selectedSeat.seatNumber);
+    const seatParam = selectedSeats.map((s) => s.seatNumber).join(",");
+    const res = await lockSeatAction(trip.id, seatParam);
     setIsSubmitting(false);
 
     if (res.success && res.lockedUntil) {
       setLockedUntil(res.lockedUntil);
       setStep(3);
     } else {
-      setSelectedSeat(null);
-      setErrorMsg(res.error || "That seat is no longer available. Availability refreshed; please choose another seat.");
+      setSelectedSeats([]);
+      setErrorMsg(res.error || "One or more selected seats are no longer available. Please select available seats.");
       setStep(1);
       router.refresh();
     }
@@ -123,7 +164,7 @@ export function BookingWizard({
 
   const handleConfirmFinalBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSeat) return;
+    if (selectedSeats.length === 0) return;
     if (paymentMode === "ONLINE" && !utrNumber) {
       setErrorMsg("Please enter your 12-digit UPI / UTR Transaction ID.");
       return;
@@ -132,15 +173,23 @@ export function BookingWizard({
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    const primaryPassenger = guestRoster[0] || { passengerName: userName, guestAge: "25", guestGender: "Male" };
+
     const res = await createBookingAction({
       tripId: trip.id,
-      seatNumber: selectedSeat.seatNumber,
+      seatNumber: selectedSeats.map((s) => s.seatNumber).join(","),
       paymentMode,
-      passengerName,
+      passengerName: primaryPassenger.passengerName || userName,
       passengerPhone,
-      guestAge: Number(guestAge) || 25,
-      guestGender,
+      guestAge: Number(primaryPassenger.guestAge) || 25,
+      guestGender: primaryPassenger.guestGender || "Male",
       utrNumber: paymentMode === "ONLINE" ? utrNumber : undefined,
+      passengers: guestRoster.map((g) => ({
+        seatNumber: g.seatNumber,
+        passengerName: g.passengerName,
+        guestAge: Number(g.guestAge) || 25,
+        guestGender: g.guestGender,
+      })),
     });
 
     setIsSubmitting(false);
@@ -155,6 +204,9 @@ export function BookingWizard({
   const minutes = Math.floor(lockTimeRemaining / 60);
   const seconds = lockTimeRemaining % 60;
   const formattedTimer = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+
+  const totalFare = selectedSeats.reduce((acc, s) => acc + Number(s.price), 0);
+  const selectedSeatNumbersStr = selectedSeats.map((s) => s.seatNumber).join(", ");
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
@@ -174,7 +226,7 @@ export function BookingWizard({
           {step > 1 && (
             <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 text-amber-500 rounded-xl text-xs font-bold shrink-0">
               <Clock className="h-4 w-4 animate-pulse" />
-              <span>Seat Lock Expires in: <span className="font-mono text-sm">{formattedTimer}</span></span>
+              <span>Group Seat Lock Expires in: <span className="font-mono text-sm">{formattedTimer}</span></span>
             </div>
           )}
         </div>
@@ -184,12 +236,12 @@ export function BookingWizard({
           <div className={`p-3 rounded-xl border text-center transition-all ${
             step === 1 ? "bg-amber-500 text-slate-950 border-amber-400 font-extrabold shadow-md" : "bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 font-semibold"
           }`}>
-            <span className="text-xs">Step 1: Choose Seat</span>
+            <span className="text-xs">Step 1: Pick Seats ({selectedSeats.length})</span>
           </div>
           <div className={`p-3 rounded-xl border text-center transition-all ${
             step === 2 ? "bg-amber-500 text-slate-950 border-amber-400 font-extrabold shadow-md" : "bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 font-semibold"
           }`}>
-            <span className="text-xs">Step 2: Lock &amp; Details</span>
+            <span className="text-xs">Step 2: Passenger Roster</span>
           </div>
           <div className={`p-3 rounded-xl border text-center transition-all ${
             step === 3 ? "bg-amber-500 text-slate-950 border-amber-400 font-extrabold shadow-md" : "bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 font-semibold"
@@ -212,18 +264,18 @@ export function BookingWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800/80">
             <div>
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Step 1: Select Your Preferred Seat
+                Step 1: Select Shuttle Seats ({selectedSeats.length} Selected)
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Click an available seat below. You can change your selection before proceeding.
+                Click 1 or more available seats below for your group booking.
               </p>
             </div>
-            {selectedSeat && (
+            {selectedSeats.length > 0 && (
               <button
                 onClick={handleProceedToStep2}
                 className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/10 transition-all flex items-center gap-2 cursor-pointer"
               >
-                Proceed with Seat {selectedSeat.seatNumber} (₹{Number(selectedSeat.price)}) <ArrowRight className="h-4 w-4" />
+                Proceed with Seats ({selectedSeatNumbersStr}) • ₹{totalFare} <ArrowRight className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -246,7 +298,7 @@ export function BookingWizard({
                 </div>
                 {trip.seats.filter((s) => s.seatType === "FRONT").map((seat) => {
                   const isAvail = seat.status === "AVAILABLE";
-                  const isChosen = selectedSeat?.id === seat.id;
+                  const isChosen = selectedSeats.some((s) => s.id === seat.id);
 
                   let styles = "bg-slate-900 border-slate-800 text-slate-600 opacity-40 cursor-not-allowed";
                   if (isChosen) styles = "bg-amber-500 border-amber-400 text-slate-950 font-black scale-105 shadow-lg shadow-amber-500/30";
@@ -272,7 +324,7 @@ export function BookingWizard({
               <div className="flex justify-center gap-4">
                 {trip.seats.filter((s) => s.seatType === "MIDDLE").map((seat) => {
                   const isAvail = seat.status === "AVAILABLE";
-                  const isChosen = selectedSeat?.id === seat.id;
+                  const isChosen = selectedSeats.some((s) => s.id === seat.id);
 
                   let styles = "bg-slate-900 border-slate-800 text-slate-600 opacity-40 cursor-not-allowed";
                   if (isChosen) styles = "bg-amber-500 border-amber-400 text-slate-950 font-black scale-105 shadow-lg shadow-amber-500/30";
@@ -298,7 +350,7 @@ export function BookingWizard({
               <div className="flex justify-center gap-4">
                 {trip.seats.filter((s) => s.seatType === "BACK").map((seat) => {
                   const isAvail = seat.status === "AVAILABLE";
-                  const isChosen = selectedSeat?.id === seat.id;
+                  const isChosen = selectedSeats.some((s) => s.id === seat.id);
 
                   let styles = "bg-slate-900 border-slate-800 text-slate-600 opacity-40 cursor-not-allowed";
                   if (isChosen) styles = "bg-amber-500 border-amber-400 text-slate-950 font-black scale-105 shadow-lg shadow-amber-500/30";
@@ -321,79 +373,119 @@ export function BookingWizard({
         </div>
       )}
 
-      {/* STEP 2: PASSENGER DETAILS & ATOMIC LOCK */}
-      {step === 2 && selectedSeat && (
+      {/* STEP 2: PASSENGER ROSTER & ATOMIC LOCK */}
+      {step === 2 && selectedSeats.length > 0 && (
         <div className="bg-white dark:bg-[#0e131f] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
           <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800/80">
             <div>
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Step 2: Passenger Details &amp; Lock Reservation
+                Step 2: Passenger Roster &amp; Atomic Lock
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Reserving Seat <span className="font-mono font-bold text-amber-500">{selectedSeat.seatNumber}</span> (₹{Number(selectedSeat.price)})
+                Seats: <span className="font-mono font-bold text-amber-500">{selectedSeatNumbersStr}</span> • Total Fare: <span className="font-bold text-emerald-500">₹{totalFare}</span>
               </p>
             </div>
             <button
               onClick={() => setStep(1)}
               className="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center gap-1"
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Change Seat
+              <ArrowLeft className="h-3.5 w-3.5" /> Modify Seats
             </button>
           </div>
 
-          <form onSubmit={handleLockAndProceedToStep3} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Passenger Full Name</label>
-                <input
-                  type="text"
-                  value={passengerName}
-                  onChange={(e) => setPassengerName(e.target.value)}
-                  required
-                  placeholder="Enter passenger name"
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Contact Phone Number</label>
-                <input
-                  type="tel"
-                  value={passengerPhone}
-                  onChange={(e) => setPassengerPhone(e.target.value)}
-                  required
-                  placeholder="10-digit phone number"
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
-                />
-              </div>
+          <form onSubmit={handleLockAndProceedToStep3} className="space-y-6">
+            <div className="space-y-1.5 max-w-sm">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Primary Contact Phone Number (SMS / Alerts)</label>
+              <input
+                type="tel"
+                value={passengerPhone}
+                onChange={(e) => setPassengerPhone(e.target.value)}
+                required
+                placeholder="10-digit phone number"
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Age</label>
-                <input
-                  type="number"
-                  value={guestAge}
-                  onChange={(e) => setGuestAge(e.target.value)}
-                  min={1}
-                  max={120}
-                  required
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
-                />
-              </div>
+            {/* Roster for each seat */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                Passenger Names &amp; Details ({selectedSeats.length} {selectedSeats.length === 1 ? "Rider" : "Riders"})
+              </h3>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Gender</label>
-                <select
-                  value={guestGender}
-                  onChange={(e) => setGuestGender(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
-                >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
+              {selectedSeats.map((seat, idx) => {
+                const entry = guestRoster[idx] || { seatNumber: seat.seatNumber, passengerName: "", guestAge: "25", guestGender: "Male" };
+                return (
+                  <div key={seat.id} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-500 font-mono">
+                        Seat {seat.seatNumber} ({seat.seatType} Row)
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold">₹{Number(seat.price)}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-1 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Full Name</label>
+                        <input
+                          type="text"
+                          value={entry.passengerName}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setGuestRoster((prev) => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], passengerName: val };
+                              return next;
+                            });
+                          }}
+                          required
+                          placeholder={idx === 0 ? "Primary Traveler Name" : `Passenger ${idx + 1} Name`}
+                          className="w-full px-3 py-2 bg-white dark:bg-[#080d1a] border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Age</label>
+                        <input
+                          type="number"
+                          value={entry.guestAge}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setGuestRoster((prev) => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], guestAge: val };
+                              return next;
+                            });
+                          }}
+                          min={1}
+                          max={120}
+                          required
+                          className="w-full px-3 py-2 bg-white dark:bg-[#080d1a] border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Gender</label>
+                        <select
+                          value={entry.guestGender}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setGuestRoster((prev) => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], guestGender: val };
+                              return next;
+                            });
+                          }}
+                          className="w-full px-3 py-2 bg-white dark:bg-[#080d1a] border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800/80">
@@ -410,7 +502,7 @@ export function BookingWizard({
                 className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/10 transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Lock className="h-4 w-4" />
-                {isSubmitting ? "Locking Seat..." : "Lock Seat & Continue to Payment"}
+                {isSubmitting ? "Locking Seats..." : `Lock ${selectedSeats.length} Seats & Continue to Payment (₹${totalFare})`}
               </button>
             </div>
           </form>
@@ -418,14 +510,14 @@ export function BookingWizard({
       )}
 
       {/* STEP 3: PAYMENT METHOD & TICKET PASS GENERATION */}
-      {step === 3 && selectedSeat && (
+      {step === 3 && selectedSeats.length > 0 && (
         <div className="bg-white dark:bg-[#0e131f] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
           <div className="pb-4 border-b border-slate-200 dark:border-slate-800/80">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-              Step 3: Select Payment Method &amp; Generate Boarding Pass
+              Step 3: Select Payment Method &amp; Generate Boarding Passes
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Seat <span className="font-mono font-bold text-amber-500">{selectedSeat.seatNumber}</span> is locked for your booking. Total Fare: <span className="font-bold text-white">₹{Number(selectedSeat.price)}</span>
+              Seats <span className="font-mono font-bold text-amber-500">{selectedSeatNumbersStr}</span> are locked. Total Group Fare: <span className="font-bold text-emerald-500">₹{totalFare}</span>
             </p>
           </div>
 
@@ -443,7 +535,7 @@ export function BookingWizard({
                   <p className="text-xs font-extrabold">Instant Online UPI Payment</p>
                   {paymentMode === "ONLINE" && <CheckCircle2 className="h-4 w-4 text-amber-500" />}
                 </div>
-                <p className="text-[11px] text-slate-500">Pay via GooglePay / PhonePe / Paytm and enter 12-digit UTR for instant pass generation.</p>
+                <p className="text-[11px] text-slate-500">Pay total ₹{totalFare} via UPI and enter 12-digit UTR for instant pass generation.</p>
               </div>
 
               <div
@@ -458,7 +550,7 @@ export function BookingWizard({
                   <p className="text-xs font-extrabold">Cash on Boarding</p>
                   {paymentMode === "CASH" && <CheckCircle2 className="h-4 w-4 text-amber-500" />}
                 </div>
-                <p className="text-[11px] text-slate-500">Reserve seat now and pay cash directly to the driver at departure time.</p>
+                <p className="text-[11px] text-slate-500">Reserve seats now and pay cash directly to the driver at departure time.</p>
               </div>
             </div>
 
@@ -471,7 +563,7 @@ export function BookingWizard({
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Amount Payable</p>
-                    <p className="text-base font-black text-amber-600 dark:text-amber-400">₹{Number(selectedSeat.price)}</p>
+                    <p className="text-base font-black text-amber-600 dark:text-amber-400">₹{totalFare}</p>
                   </div>
                 </div>
 
@@ -489,9 +581,6 @@ export function BookingWizard({
                     maxLength={20}
                     className="w-full px-4 py-3 bg-white dark:bg-[#060911] border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/50"
                   />
-                  <p className="text-[10px] text-slate-500">
-                    Find the 12-digit UTR / UPI Ref ID in your payment app under transaction details.
-                  </p>
                 </div>
               </div>
             ) : (
@@ -500,7 +589,7 @@ export function BookingWizard({
                   <ShieldCheck className="h-4 w-4" /> Cash on Boarding Policy
                 </p>
                 <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
-                  Your seat <span className="font-mono font-bold text-amber-500">{selectedSeat.seatNumber}</span> will be reserved. Please hand over cash (₹{Number(selectedSeat.price)}) directly to the shuttle driver at boarding time. Uncollected cash holds automatically expire 60 minutes prior to trip departure.
+                  Your seats <span className="font-mono font-bold text-amber-500">{selectedSeatNumbersStr}</span> will be reserved. Please hand over cash (₹{totalFare}) directly to the shuttle driver at boarding time.
                 </p>
               </div>
             )}
@@ -519,7 +608,7 @@ export function BookingWizard({
                 className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/10 transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Ticket className="h-4 w-4" />
-                {isSubmitting ? "Issuing Ticket Pass..." : "Confirm & Issue Boarding Pass"}
+                {isSubmitting ? "Issuing Passes..." : `Confirm & Issue ${selectedSeats.length} Boarding Passes (₹${totalFare})`}
               </button>
             </div>
           </form>

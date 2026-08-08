@@ -77,8 +77,8 @@ describe("UI Rendering & Accessibility Tests", () => {
       const buttons = screen.getAllByRole("button");
       expect(buttons.length).toBeGreaterThan(0);
       
-      // Verify hardcoded classes that ignore light mode
-      const container = buttons[0].closest('.bg-slate-950\\/80');
+      // Verify theme-aware design system classes
+      const container = buttons[0].closest('.bg-\\[var\\(--card\\)\\]');
       expect(container).not.toBeNull();
     });
   });

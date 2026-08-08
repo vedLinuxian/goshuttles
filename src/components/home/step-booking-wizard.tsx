@@ -89,11 +89,13 @@ export function StepBookingWizard({
   const [error, setError] = useState<string | null>(null);
 
   // Step 3 & 4 Selected Details
+  // Step 3 & 4 Selected Details
   const [selectedTrip, setSelectedTrip] = useState<RideSummary | null>(initialRides[0] || null);
-  const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
+  const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const searchRequestRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const selectedSeat = selectedSeats[0] || null;
   const filteredRides = rides;
 
   // DOM refs — read the ACTUAL current select/input values at search time.
@@ -109,21 +111,21 @@ export function StepBookingWizard({
     setSourceId(destinationId);
     setDestinationId(sourceId);
     setSelectedTrip(null);
-    setSelectedSeat(null);
+    setSelectedSeats([]);
     if (currentStep > 1) setCurrentStep(1);
   };
 
   const handleSourceChange = (id: string) => {
     setSourceId(id);
     setSelectedTrip(null);
-    setSelectedSeat(null);
+    setSelectedSeats([]);
     if (currentStep > 1) setCurrentStep(1);
   };
 
   const handleDestinationChange = (id: string) => {
     setDestinationId(id);
     setSelectedTrip(null);
-    setSelectedSeat(null);
+    setSelectedSeats([]);
     if (currentStep > 1) setCurrentStep(1);
   };
 
@@ -138,6 +140,7 @@ export function StepBookingWizard({
     setCurrentStep(1);
     setCurrentPage(1);
     setHasMore(false);
+    setSelectedSeats([]);
   };
 
   const handleSearchNow = useCallback(() => {
@@ -183,7 +186,7 @@ export function StepBookingWizard({
         });
         setRides(nextRides);
         setSelectedTrip(null);
-        setSelectedSeat(null);
+        setSelectedSeats([]);
         setHasMore(payload.total > (payload.page || 1) * (payload.limit || 20));
       })
       .catch((err) => {
@@ -191,13 +194,12 @@ export function StepBookingWizard({
         if (requestId !== searchRequestRef.current) return;
         setError(err instanceof Error ? err.message : "Unable to search departures.");
         setSelectedTrip(null);
-        setSelectedSeat(null);
+        setSelectedSeats([]);
       })
       .finally(() => {
         if (requestId === searchRequestRef.current) setLoading(false);
       });
-  }, [sourceId, destinationId, date, passengers, windowFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  }, [sourceId, destinationId, date, passengers, windowFilter]);
 
   async function handleLoadMore() {
     const nextPage = currentPage + 1;
@@ -254,22 +256,30 @@ export function StepBookingWizard({
 
   const handleSelectTrip = (trip: RideSummary) => {
     setSelectedTrip(trip);
-    setSelectedSeat(null);
+    setSelectedSeats([]);
   };
 
   const handleSeatClick = (seat: Seat) => {
     if (seat.status !== "AVAILABLE") return;
-    setSelectedSeat(seat);
+    setSelectedSeats((prev) => {
+      const exists = prev.some((s) => s.id === seat.id);
+      if (exists) {
+        return prev.filter((s) => s.id !== seat.id);
+      }
+      if (prev.length >= 6) return prev;
+      return [...prev, seat];
+    });
   };
 
   const handleProceedToConfirm = () => {
-    if (!selectedSeat) return;
+    if (selectedSeats.length === 0) return;
     setCurrentStep(4);
   };
 
   const handleFinalBookingSubmit = () => {
-    if (!selectedTrip || !selectedSeat) return;
-    const bookingPath = `/passenger/trips/${selectedTrip.id}?seat=${selectedSeat.seatNumber}`;
+    if (!selectedTrip || selectedSeats.length === 0) return;
+    const seatParam = selectedSeats.map((s) => s.seatNumber).join(",");
+    const bookingPath = `/passenger/trips/${selectedTrip.id}?seat=${encodeURIComponent(seatParam)}`;
     if (!isLoggedIn) {
       router.push(`/login?callbackUrl=${encodeURIComponent(bookingPath)}`);
     } else {
@@ -639,7 +649,7 @@ export function StepBookingWizard({
                       <SeatPill
                         key={seat.id}
                         seat={seat}
-                        isSelected={selectedSeat?.id === seat.id}
+                        isSelected={selectedSeats.some((s) => s.id === seat.id)}
                         onClick={() => handleSeatClick(seat)}
                       />
                     ))}
@@ -653,7 +663,7 @@ export function StepBookingWizard({
                       <SeatPill
                         key={seat.id}
                         seat={seat}
-                        isSelected={selectedSeat?.id === seat.id}
+                        isSelected={selectedSeats.some((s) => s.id === seat.id)}
                         onClick={() => handleSeatClick(seat)}
                       />
                     ))}
@@ -667,7 +677,7 @@ export function StepBookingWizard({
                       <SeatPill
                         key={seat.id}
                         seat={seat}
-                        isSelected={selectedSeat?.id === seat.id}
+                        isSelected={selectedSeats.some((s) => s.id === seat.id)}
                         onClick={() => handleSeatClick(seat)}
                       />
                     ))}
@@ -680,7 +690,7 @@ export function StepBookingWizard({
                   <span className="w-3 h-3 rounded-md bg-[var(--card)] border border-[var(--border)]" /> Available
                 </span>
                 <span className="flex items-center gap-1.5 text-amber-500">
-                  <span className="w-3 h-3 rounded-md bg-amber-500" /> Selected
+                  <span className="w-3 h-3 rounded-md bg-amber-500" /> Selected ({selectedSeats.length})
                 </span>
                 <span className="flex items-center gap-1.5 text-[var(--muted-foreground)] opacity-50">
                   <span className="w-3 h-3 rounded-md bg-rose-500/20 border border-rose-500/40" /> Booked
@@ -690,22 +700,20 @@ export function StepBookingWizard({
 
             {/* Selected Seat Details */}
             <div className="lg:col-span-5 p-6 rounded-3xl bg-[var(--muted)] border border-[var(--border)] space-y-4">
-              <h4 className="text-sm font-extrabold text-[var(--foreground)] uppercase tracking-wider">Seat Summary</h4>
+              <h4 className="text-sm font-extrabold text-[var(--foreground)] uppercase tracking-wider">Group Seat Summary</h4>
 
-              {selectedSeat ? (
+              {selectedSeats.length > 0 ? (
                 <div className="space-y-4">
                   <div className="p-4 rounded-2xl bg-[var(--card)] border border-amber-500/30 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-[var(--muted-foreground)] font-bold">Selected Seat Number</span>
-                      <span className="text-lg font-black text-amber-500 font-mono">{selectedSeat.seatNumber}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--muted-foreground)]">Seat Category</span>
-                      <span className="font-bold text-[var(--foreground)] capitalize">{selectedSeat.seatType}</span>
+                      <span className="text-xs text-[var(--muted-foreground)] font-bold">Selected ({selectedSeats.length} {selectedSeats.length === 1 ? "Seat" : "Seats"})</span>
+                      <span className="text-base font-black text-amber-500 font-mono">{selectedSeats.map((s) => s.seatNumber).join(", ")}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-[var(--border)]">
-                      <span className="text-[var(--muted-foreground)] font-bold">Seat Fare</span>
-                      <span className="text-base font-black text-emerald-500 dark:text-emerald-400">₹{Number(selectedSeat.price)}</span>
+                      <span className="text-[var(--muted-foreground)] font-bold">Total Group Fare</span>
+                      <span className="text-base font-black text-emerald-500 dark:text-emerald-400">
+                        ₹{selectedSeats.reduce((acc, s) => acc + Number(s.price), 0)}
+                      </span>
                     </div>
                   </div>
 
@@ -714,14 +722,14 @@ export function StepBookingWizard({
                     onClick={handleProceedToConfirm}
                     className="w-full bg-amber-500 hover:bg-amber-400 text-[var(--background)] font-black h-11 rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span>Proceed to Confirm (₹{Number(selectedSeat.price)})</span>
+                    <span>Proceed to Confirm (₹{selectedSeats.reduce((acc, s) => acc + Number(s.price), 0)})</span>
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
                 <div className="p-8 text-center text-[var(--muted-foreground)] space-y-2">
                   <Armchair className="h-8 w-8 mx-auto text-amber-500/40" />
-                  <p className="text-xs font-bold">Please click an available seat on the map to select it.</p>
+                  <p className="text-xs font-bold">Click 1 or more available seats on the map to select for your group.</p>
                 </div>
               )}
             </div>
@@ -730,7 +738,7 @@ export function StepBookingWizard({
       )}
 
       {/* STEP 4: Lock Ticket & Confirm */}
-      {currentStep === 4 && selectedTrip && selectedSeat && (
+      {currentStep === 4 && selectedTrip && selectedSeats.length > 0 && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <div>
@@ -751,16 +759,16 @@ export function StepBookingWizard({
               <span className="text-xs font-bold text-[var(--muted-foreground)] uppercase tracking-wider block">Departure &amp; Route</span>
               <p className="text-sm font-black text-[var(--foreground)]">{selectedTrip.source.name} ➔ {selectedTrip.destination.name}</p>
               <p className="text-xs text-[var(--muted-foreground)]">Date: {new Date(selectedTrip.startTime).toLocaleString("en-IN")}</p>
-              <p className="text-xs text-[var(--muted-foreground)]">Seat: <span className="font-mono font-bold text-amber-500">{selectedSeat.seatNumber} ({selectedSeat.seatType})</span></p>
-              <p className="text-xs text-[var(--muted-foreground)]">Ticket Fare: <span className="font-bold text-amber-500 text-sm">₹{Number(selectedSeat.price)}</span></p>
+              <p className="text-xs text-[var(--muted-foreground)]">Seats ({selectedSeats.length}): <span className="font-mono font-bold text-amber-500">{selectedSeats.map((s) => s.seatNumber).join(", ")}</span></p>
+              <p className="text-xs text-[var(--muted-foreground)]">Total Group Fare: <span className="font-bold text-amber-500 text-sm">₹{selectedSeats.reduce((acc, s) => acc + Number(s.price), 0)}</span></p>
             </div>
 
             <div className="p-5 rounded-2xl bg-[var(--muted)] border border-[var(--border)] space-y-3">
-              <span className="text-xs font-bold text-[var(--muted-foreground)] uppercase tracking-wider block">5-Minute Atomic Lock Guarantee</span>
+              <span className="text-xs font-bold text-[var(--muted-foreground)] uppercase tracking-wider block">5-Minute Atomic Group Lock Guarantee</span>
               <div className="space-y-2 text-xs text-[var(--foreground)]">
-                <p className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-amber-500" /> Atomic database lock holds seat exclusively for checkout.</p>
-                <p className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Instant QR Boarding Pass generated on completion.</p>
-                <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-indigo-500" /> Cash or Online payment accepted at pickup.</p>
+                <p className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-amber-500" /> Atomic database engine holds all {selectedSeats.length} seats simultaneously.</p>
+                <p className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Instant QR Passes generated for all passengers.</p>
+                <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-indigo-500" /> Single consolidated payment for the group.</p>
               </div>
             </div>
           </div>
@@ -772,7 +780,7 @@ export function StepBookingWizard({
               className="w-full py-4 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-[var(--background)] font-black text-sm uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-95"
             >
               <Zap className="h-4 w-4 fill-current" />
-              <span>Proceed to Lock &amp; Issue Ticket (₹{Number(selectedSeat.price)})</span>
+              <span>Proceed to Lock &amp; Issue Tickets (₹{selectedSeats.reduce((acc, s) => acc + Number(s.price), 0)})</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
