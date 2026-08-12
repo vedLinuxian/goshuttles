@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopHeader } from "@/components/layout/top-header";
 import { ToastProvider } from "@/components/ui/toast";
+import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
 
 export default async function DashboardLayout({
   children,
@@ -14,6 +15,7 @@ export default async function DashboardLayout({
 
   return (
     <ToastProvider>
+      <ImpersonationBanner />
       <div className="flex min-h-screen flex-col bg-[var(--background)] font-sans text-[var(--foreground)] selection:bg-amber-500 selection:text-slate-950 transition-colors lg:h-screen lg:flex-row lg:overflow-hidden">
         <div className="dashboard-sidebar shrink-0"><Sidebar user={session.user} /></div>
         <div className="flex min-h-0 flex-1 flex-col bg-[var(--background)]">

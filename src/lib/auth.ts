@@ -79,8 +79,28 @@ export async function getServerSession(reqHeaders?: Headers) {
     const res = await auth.api.getSession({ headers: requestHeaders });
     if (!res || !res.user) return null;
 
+    const cookieStore = await cookies();
+    const impersonateTargetId = cookieStore.get("impersonate_target_id")?.value;
+
+    let targetUserId = res.user.id;
+    let isImpersonating = false;
+    let originalAdminId: string | null = null;
+
+    if (impersonateTargetId && impersonateTargetId !== res.user.id) {
+      const dbAdminUser = await db.user.findUnique({
+        where: { id: res.user.id },
+        select: { role: true, isActive: true },
+      });
+
+      if (dbAdminUser?.role === "ADMIN" && dbAdminUser.isActive) {
+        targetUserId = impersonateTargetId;
+        isImpersonating = true;
+        originalAdminId = res.user.id;
+      }
+    }
+
     const dbUser = await db.user.findUnique({
-      where: { id: res.user.id },
+      where: { id: targetUserId },
       select: { role: true, isActive: true, phone: true, name: true, email: true },
     });
 
@@ -88,20 +108,25 @@ export async function getServerSession(reqHeaders?: Headers) {
 
     return {
       ...res,
+      isImpersonating,
+      originalAdminId,
       user: {
         ...res.user,
-        id: res.user.id,
+        id: targetUserId,
         name: dbUser.name ?? res.user.name ?? null,
         email: dbUser.email ?? res.user.email ?? null,
         phone: dbUser.phone || (res.user as { phone?: string }).phone || "",
         role: dbUser.role || "CUSTOMER",
         isActive: dbUser.isActive,
+        isImpersonating,
+        originalAdminId,
       },
     };
   } catch {
     return null;
   }
 }
+
 
 export async function applySetCookies(setCookie: string | string[] | null | undefined) {
   if (!setCookie) return;

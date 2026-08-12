@@ -1,17 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import crypto from "node:crypto";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(req.headers);
-  if (!session?.user || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
   const { searchParams } = new URL(req.url);
-  const targetUserId = searchParams.get("userId");
+  const action = searchParams.get("action");
 
+  // Handle EXIT Impersonation Sandbox
+  if (action === "exit") {
+    const response = NextResponse.redirect(new URL("/admin/users", req.url));
+    response.cookies.delete("impersonate_target_id");
+    return response;
+  }
+
+  // Handle START Impersonation Sandbox
+  // Requester must be an actual ADMIN
+  if (session.user.role !== "ADMIN" && !session.user.isImpersonating) {
+    return NextResponse.json({ error: "Admin access required for impersonation." }, { status: 403 });
+  }
+
+  const targetUserId = searchParams.get("userId");
   if (!targetUserId) {
     return NextResponse.json({ error: "Target userId is required." }, { status: 400 });
   }
@@ -28,39 +41,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Cannot impersonate an inactive user." }, { status: 400 });
   }
 
-  // Create temporary session token (valid 2 hours)
-  const token = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
-
-  await db.session.create({
-    data: {
-      id: crypto.randomUUID(),
-      userId: targetUser.id,
-      token,
-      expiresAt,
-    },
-  });
-
-  // Determine redirect URL based on role
   let redirectPath = "/passenger/dashboard";
   if (targetUser.role === "DRIVER") redirectPath = "/driver/dashboard";
   if (targetUser.role === "ADMIN") redirectPath = "/admin/dashboard";
 
-  const redirectUrl = new URL(redirectPath, req.url);
-  const response = NextResponse.redirect(redirectUrl);
+  const response = NextResponse.redirect(new URL(redirectPath, req.url));
 
-  // Set better-auth session cookies
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+  // Set non-destructive impersonation cookie
+  response.cookies.set("impersonate_target_id", targetUser.id, {
     path: "/",
-    expires: expiresAt,
-  };
-
-  response.cookies.set("better-auth.session_token", token, cookieOptions);
-  response.cookies.set("__Secure-better-auth.session_token", token, cookieOptions);
-  response.cookies.set("impersonating_admin_id", session.user.id, { ...cookieOptions, httpOnly: false });
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
 
   return response;
 }
