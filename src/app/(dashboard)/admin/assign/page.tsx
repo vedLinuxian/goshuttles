@@ -10,9 +10,15 @@ export interface DriverSerialized {
   phone: string;
   isActive: boolean;
   driverProfile: {
+    id?: string;
+    fullName: string | null;
+    aadhaarNumber: string | null;
+    licenseNumber: string | null;
     kycStatus: string;
     isAvailable: boolean;
     rating: number;
+    walletBalance: number;
+    totalEarnings: number;
   } | null;
   vehicles: {
     id: string;
@@ -50,9 +56,21 @@ export default async function AssignVehiclePage() {
 
   const [drivers, vehicles] = await Promise.all([
     db.user.findMany({
-      where: { role: "DRIVER", isActive: true },
+      where: { role: "DRIVER" },
       include: {
-        driverProfile: { select: { kycStatus: true, isAvailable: true, rating: true } },
+        driverProfile: {
+          select: {
+            id: true,
+            fullName: true,
+            aadhaarNumber: true,
+            licenseNumber: true,
+            kycStatus: true,
+            isAvailable: true,
+            rating: true,
+            walletBalance: true,
+            totalEarnings: true,
+          },
+        },
         vehicles: {
           select: {
             id: true,
@@ -98,9 +116,15 @@ export default async function AssignVehiclePage() {
     isActive: driver.isActive,
     driverProfile: driver.driverProfile
       ? {
+          id: driver.driverProfile.id,
+          fullName: driver.driverProfile.fullName,
+          aadhaarNumber: driver.driverProfile.aadhaarNumber,
+          licenseNumber: driver.driverProfile.licenseNumber,
           kycStatus: driver.driverProfile.kycStatus,
           isAvailable: driver.driverProfile.isAvailable,
           rating: driver.driverProfile.rating ? Number(driver.driverProfile.rating) : 5.0,
+          walletBalance: driver.driverProfile.walletBalance ? Number(driver.driverProfile.walletBalance) : 0,
+          totalEarnings: driver.driverProfile.totalEarnings ? Number(driver.driverProfile.totalEarnings) : 0,
         }
       : null,
     vehicles: driver.vehicles.map((v) => ({
@@ -137,4 +161,5 @@ export default async function AssignVehiclePage() {
 
   return <AssignVehicleClient drivers={serializedDrivers} vehicles={serializedVehicles} />;
 }
+
 

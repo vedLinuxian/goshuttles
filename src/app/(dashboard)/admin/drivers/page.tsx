@@ -30,6 +30,7 @@ export default async function AdminDriversPage({
     db.user.findMany({
       where,
       include: { driverProfile: true, _count: { select: { assignedTrips: true, vehicles: true } } },
+      orderBy: { name: "asc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -37,16 +38,30 @@ export default async function AdminDriversPage({
   ]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
   const serializedDrivers = drivers.map((driver) => ({
-    ...driver,
+    id: driver.id,
+    name: driver.name,
+    email: driver.email,
+    phone: driver.phone,
+    isActive: driver.isActive,
     driverProfile: driver.driverProfile
       ? {
-          ...driver.driverProfile,
+          id: driver.driverProfile.id,
+          kycStatus: driver.driverProfile.kycStatus,
+          fullName: driver.driverProfile.fullName,
+          aadhaarNumber: driver.driverProfile.aadhaarNumber,
+          licenseNumber: driver.driverProfile.licenseNumber,
           rating: Number(driver.driverProfile.rating),
           walletBalance: Number(driver.driverProfile.walletBalance),
           totalEarnings: Number(driver.driverProfile.totalEarnings),
+          isAvailable: driver.driverProfile.isAvailable,
         }
       : null,
+    _count: {
+      assignedTrips: driver._count.assignedTrips,
+      vehicles: driver._count.vehicles,
+    },
   }));
 
   return (
@@ -59,3 +74,4 @@ export default async function AdminDriversPage({
     />
   );
 }
+

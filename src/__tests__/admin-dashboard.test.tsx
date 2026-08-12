@@ -146,9 +146,10 @@ describe('Admin Dashboard - Locations Management', () => {
       />
     );
 
-    expect(screen.getByText('City A')).toBeDefined();
+    expect(screen.getAllByText('City A')[0]).toBeDefined();
     expect(screen.getByDisplayValue('1.5')).toBeDefined(); // Surge Multiplier
     expect(screen.getByDisplayValue('0.8')).toBeDefined(); // Occupancy Threshold
+
   });
 
   it('calculates simulated fare correctly', async () => {

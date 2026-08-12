@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { assignVehicleToDriverAction, unassignVehicleAction } from "@/app/actions/vehicle-actions";
+import { registerDriverAction, updateDriverDetailsAction, toggleUserActiveStatus } from "@/app/actions/user-actions";
+import { updateDriverKycStatus } from "@/app/actions/profile-actions";
 import type { DriverSerialized, VehicleSerialized } from "./page";
 import {
   Link2,
@@ -26,6 +28,14 @@ import {
   Check,
   AlertTriangle,
   Info,
+  UserPlus,
+  Pencil,
+  Eye,
+  ShieldCheck,
+  DollarSign,
+  Wallet,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import {
   Badge,
@@ -38,6 +48,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  Input,
+  Label,
 } from "@/components/ui";
 
 interface AssignVehicleClientProps {
@@ -59,7 +71,27 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
   const [searchQuery, setSearchQuery] = useState("");
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  // Modal dialog states
+  // Driver CRUD Modals State
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [editingDriver, setEditingDriver] = useState<DriverSerialized | null>(null);
+  const [viewingDriver, setViewingDriver] = useState<DriverSerialized | null>(null);
+
+  // Form inputs for Register Driver Modal
+  const [regName, setRegName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regLicense, setRegLicense] = useState("");
+  const [regAadhaar, setRegAadhaar] = useState("");
+  const [regKycStatus, setRegKycStatus] = useState<"APPROVED" | "PENDING">("APPROVED");
+
+  // Form inputs for Edit Driver Modal
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editLicense, setEditLicense] = useState("");
+  const [editAadhaar, setEditAadhaar] = useState("");
+  const [editKycStatus, setEditKycStatus] = useState<"PENDING" | "APPROVED" | "REJECTED">("APPROVED");
+  const [editWalletBalance, setEditWalletBalance] = useState("0");
+
+  // Vehicle Link Modals
   const [assigningModalDriver, setAssigningModalDriver] = useState<DriverSerialized | null>(null);
   const [modalVehicleId, setModalVehicleId] = useState<string>("");
   const [unassigningVehicle, setUnassigningVehicle] = useState<{ vehicleId: string; regNumber: string; driverName: string } | null>(null);
@@ -71,7 +103,6 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
   const unassignedVehicles = vehicles.filter(
     (v) => !v.owner?.phone || !drivers.some((d) => d.id === v.ownerId)
   );
-  const totalVehicles = vehicles.length;
   const utilizationRate = totalDrivers > 0 ? Math.round((pairedDrivers / totalDrivers) * 100) : 0;
 
   // Selected driver & vehicle objects for top quick linker
@@ -123,6 +154,7 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
     [vehicles, drivers]
   );
 
+  // Action Handlers
   async function handleAssign(driverIdToAssign?: string, vehicleIdToAssign?: string) {
     const targetDriverId = driverIdToAssign || selectedDriverId;
     const targetVehicleId = vehicleIdToAssign || selectedVehicleId;
@@ -185,6 +217,123 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
     }
   }
 
+  async function handleRegisterDriver(e: React.FormEvent) {
+    e.preventDefault();
+    if (!regName || !regPhone) return;
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await registerDriverAction({
+        name: regName,
+        phone: regPhone,
+        licenseNumber: regLicense,
+        aadhaarNumber: regAadhaar,
+        kycStatus: regKycStatus,
+      });
+
+      if (res.success) {
+        setResult({
+          success: true,
+          message: `Driver partner "${regName}" successfully registered.`,
+        });
+        setIsRegisterModalOpen(false);
+        setRegName("");
+        setRegPhone("");
+        setRegLicense("");
+        setRegAadhaar("");
+        router.refresh();
+      } else {
+        setResult({ success: false, message: res.error || "Failed to register driver." });
+      }
+    } catch (err) {
+      setResult({ success: false, message: err instanceof Error ? err.message : "Error registering driver." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUpdateDriver(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingDriver) return;
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await updateDriverDetailsAction({
+        driverId: editingDriver.id,
+        name: editName,
+        phone: editPhone,
+        licenseNumber: editLicense,
+        aadhaarNumber: editAadhaar,
+        kycStatus: editKycStatus,
+        walletBalance: Number(editWalletBalance) || 0,
+      });
+
+      if (res.success) {
+        setResult({
+          success: true,
+          message: `Driver partner details updated successfully.`,
+        });
+        setEditingDriver(null);
+        router.refresh();
+      } else {
+        setResult({ success: false, message: res.error || "Failed to update driver." });
+      }
+    } catch (err) {
+      setResult({ success: false, message: err instanceof Error ? err.message : "Error updating driver." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleQuickKycChange(driverId: string, status: "APPROVED" | "PENDING" | "REJECTED") {
+    setLoading(true);
+    try {
+      const res = await updateDriverKycStatus(driverId, status);
+      if (res.success) {
+        setResult({ success: true, message: `Driver KYC status set to ${status}.` });
+        router.refresh();
+      } else {
+        setResult({ success: false, message: res.error || "Failed to update KYC status." });
+      }
+    } catch (err) {
+      setResult({ success: false, message: err instanceof Error ? err.message : "Error updating KYC status." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleToggleDriverActive(driverId: string, currentActive: boolean) {
+    setLoading(true);
+    try {
+      const res = await toggleUserActiveStatus(driverId, !currentActive);
+      if (res.success) {
+        setResult({
+          success: true,
+          message: `Driver partner account ${!currentActive ? "activated" : "deactivated"}.`,
+        });
+        router.refresh();
+      } else {
+        setResult({ success: false, message: res.error || "Failed to update driver status." });
+      }
+    } catch (err) {
+      setResult({ success: false, message: err instanceof Error ? err.message : "Error toggling status." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const openEditModal = (driver: DriverSerialized) => {
+    setEditingDriver(driver);
+    setEditName(driver.name || "");
+    setEditPhone(driver.phone || "");
+    setEditLicense(driver.driverProfile?.licenseNumber || "");
+    setEditAadhaar(driver.driverProfile?.aadhaarNumber || "");
+    setEditKycStatus((driver.driverProfile?.kycStatus as "PENDING" | "APPROVED" | "REJECTED") || "APPROVED");
+    setEditWalletBalance(String(driver.driverProfile?.walletBalance || 0));
+  };
+
   const filteredDrivers = useMemo(() => {
     return drivers.filter((d) => {
       const hasVehicle = d.vehicles.length > 0;
@@ -197,6 +346,8 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
         d.name?.toLowerCase().includes(q) ||
         d.phone.includes(q) ||
         d.email?.toLowerCase().includes(q) ||
+        d.driverProfile?.licenseNumber?.toLowerCase().includes(q) ||
+        d.driverProfile?.aadhaarNumber?.toLowerCase().includes(q) ||
         d.vehicles.some((v) => v.regNumber.toLowerCase().includes(q) || v.modelName.toLowerCase().includes(q))
       );
     });
@@ -220,19 +371,28 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
             1-to-1 Vehicle &amp; Driver Fleet Allocation
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Enforce strict single driver-to-vehicle pairing across your shuttle fleet with real-time telemetry.
+            Enforce strict single driver-to-vehicle pairing across your shuttle fleet with real-time CRUD controls.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <Button
+            type="button"
+            onClick={() => setIsRegisterModalOpen(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 h-10 rounded-xl shadow-lg glow-amber flex items-center gap-2 cursor-pointer transition-transform active:scale-95"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>+ Register Driver Partner</span>
+          </Button>
+
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => router.refresh()}
-            className="border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-xs font-semibold"
+            className="border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-xs font-semibold h-10"
           >
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh Fleet Data
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
           </Button>
         </div>
       </div>
@@ -256,7 +416,7 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Paired Fleet</p>
             <p className="text-2xl font-black text-emerald-400 mt-1">{pairedDrivers}</p>
-            <p className="text-[10px] text-slate-400 font-medium mt-0.5">1-to-1 Linked</p>
+            <p className="text-[10px] text-slate-400 font-medium mt-0.5">{utilizationRate}% Allocation Rate</p>
           </div>
           <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <CheckCircle2 className="h-5 w-5" />
@@ -555,10 +715,11 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
             No driver partners match the current search or filter criteria.
           </Card>
         ) : viewMode === "GRID" ? (
-          /* GRID VIEW */
+          /* GRID VIEW WITH FULL CRUD ACTIONS */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDrivers.map((driver) => {
               const assignedVehicle = driver.vehicles.length > 0 ? driver.vehicles[0] : null;
+              const kyc = driver.driverProfile?.kycStatus || "PENDING";
 
               return (
                 <Card
@@ -570,23 +731,55 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
                       : "border-slate-800 bg-[#0c101c]/80 hover:border-slate-700"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  {/* Top Bar: Driver Identity + KYC Badge + Status */}
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-3">
                     <div>
                       <h3 className="font-extrabold text-white text-base flex items-center gap-2">
                         {driver.name || "Driver Partner"}
+                        {!driver.isActive && (
+                          <span className="text-[10px] bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/30 font-mono">
+                            Suspended
+                          </span>
+                        )}
                       </h3>
                       <p className="text-xs font-mono text-slate-400 mt-0.5">{driver.phone}</p>
                     </div>
 
                     <div className="flex flex-col items-end gap-1">
-                      <Badge variant={driver.driverProfile?.kycStatus === "APPROVED" ? "success" : "warning"}>
-                        {driver.driverProfile?.kycStatus || "PENDING"}
-                      </Badge>
+                      {/* KYC Badge with quick action click */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickKycChange(
+                            driver.id,
+                            kyc === "APPROVED" ? "PENDING" : "APPROVED"
+                          )
+                        }
+                        title="Click to toggle KYC status"
+                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                      >
+                        <Badge variant={kyc === "APPROVED" ? "success" : kyc === "REJECTED" ? "destructive" : "warning"}>
+                          {kyc}
+                        </Badge>
+                      </button>
+
                       {driver.driverProfile?.rating !== undefined && (
                         <span className="text-[10px] font-bold text-amber-400 flex items-center gap-1">
                           <Star className="h-3 w-3 fill-amber-400" /> {driver.driverProfile.rating.toFixed(1)}
                         </span>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Driver Telemetry Badges */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">Wallet Balance</span>
+                      <span className="font-black text-emerald-400 text-xs">₹{driver.driverProfile?.walletBalance || 0}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">Total Earnings</span>
+                      <span className="font-black text-amber-400 text-xs">₹{driver.driverProfile?.totalEarnings || 0}</span>
                     </div>
                   </div>
 
@@ -660,12 +853,47 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
                       </div>
                     )}
                   </div>
+
+                  {/* Card CRUD Toolbar Action Buttons */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setViewingDriver(driver)}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Eye className="h-3.5 w-3.5 text-amber-400" /> View Profile
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(driver)}
+                        className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-amber-400 transition-colors cursor-pointer"
+                        title="Edit Driver Details"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDriverActive(driver.id, driver.isActive)}
+                        className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                          driver.isActive
+                            ? "bg-slate-900 hover:bg-rose-950/40 border-slate-800 text-slate-400 hover:text-rose-400"
+                            : "bg-emerald-950/30 border-emerald-500/30 text-emerald-400"
+                        }`}
+                        title={driver.isActive ? "Deactivate Driver Account" : "Activate Driver Account"}
+                      >
+                        {driver.isActive ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
                 </Card>
               );
             })}
           </div>
         ) : (
-          /* TABLE VIEW */
+          /* TABLE VIEW WITH COMPLETE ACTION BUTTONS */
           <Card variant="glass" className="p-0 border-slate-800 bg-[#0c101c]/80 overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -674,30 +902,62 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
                     <th className="py-3.5 px-4">Driver Partner</th>
                     <th className="py-3.5 px-4">Contact</th>
                     <th className="py-3.5 px-4">KYC &amp; Rating</th>
+                    <th className="py-3.5 px-4">Wallet &amp; Earnings</th>
                     <th className="py-3.5 px-4">Assigned Vehicle</th>
                     <th className="py-3.5 px-4 text-center">Active Trips</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
+                    <th className="py-3.5 px-4 text-right">CRUD Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-xs font-semibold text-white">
                   {filteredDrivers.map((driver) => {
                     const assignedVehicle = driver.vehicles.length > 0 ? driver.vehicles[0] : null;
+                    const kyc = driver.driverProfile?.kycStatus || "PENDING";
 
                     return (
                       <tr key={driver.id} className="hover:bg-slate-900/40 transition-colors">
-                        <td className="py-3.5 px-4 font-bold">{driver.name || "Driver Partner"}</td>
+                        <td className="py-3.5 px-4">
+                          <div>
+                            <p className="font-bold flex items-center gap-1.5">
+                              {driver.name || "Driver Partner"}
+                              {!driver.isActive && (
+                                <span className="text-[9px] bg-rose-500/20 text-rose-400 px-1.5 py-0.2 rounded border border-rose-500/30">
+                                  Off
+                                </span>
+                              )}
+                            </p>
+                            {driver.driverProfile?.licenseNumber && (
+                              <p className="text-[10px] font-mono text-slate-500">Lic: {driver.driverProfile.licenseNumber}</p>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3.5 px-4 font-mono text-slate-400">{driver.phone}</td>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2">
-                            <Badge variant={driver.driverProfile?.kycStatus === "APPROVED" ? "success" : "warning"}>
-                              {driver.driverProfile?.kycStatus || "PENDING"}
-                            </Badge>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleQuickKycChange(
+                                  driver.id,
+                                  kyc === "APPROVED" ? "PENDING" : "APPROVED"
+                                )
+                              }
+                              title="Click to toggle KYC"
+                              className="cursor-pointer"
+                            >
+                              <Badge variant={kyc === "APPROVED" ? "success" : kyc === "REJECTED" ? "destructive" : "warning"}>
+                                {kyc}
+                              </Badge>
+                            </button>
                             {driver.driverProfile?.rating !== undefined && (
                               <span className="text-amber-400 font-bold flex items-center gap-0.5 text-[11px]">
                                 ⭐ {driver.driverProfile.rating.toFixed(1)}
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono">
+                          <span className="text-emerald-400 font-bold">₹{driver.driverProfile?.walletBalance || 0}</span>
+                          <span className="text-slate-500 text-[10px] block">Earned: ₹{driver.driverProfile?.totalEarnings || 0}</span>
                         </td>
                         <td className="py-3.5 px-4">
                           {assignedVehicle ? (
@@ -716,18 +976,26 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          {assignedVehicle ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setAssigningModalDriver(driver);
-                                  setModalVehicleId(assignedVehicle.id);
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold transition-colors cursor-pointer"
-                              >
-                                Change
-                              </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setViewingDriver(driver)}
+                              title="View Telemetry Profile"
+                              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-400 border border-slate-800 transition-colors cursor-pointer"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(driver)}
+                              title="Edit Driver Profile"
+                              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-400 border border-slate-800 transition-colors cursor-pointer"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+
+                            {assignedVehicle ? (
                               <button
                                 type="button"
                                 onClick={() =>
@@ -737,23 +1005,25 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
                                     driverName: driver.name || "Driver",
                                   })
                                 }
-                                className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[11px] font-bold border border-rose-500/30 transition-colors cursor-pointer"
+                                title="Unassign Vehicle"
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
                               >
-                                Unassign
+                                <UserX className="h-3.5 w-3.5" />
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAssigningModalDriver(driver);
-                                setModalVehicleId("");
-                              }}
-                              className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] transition-all cursor-pointer shadow-md glow-amber"
-                            >
-                              Assign Vehicle
-                            </button>
-                          )}
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAssigningModalDriver(driver);
+                                  setModalVehicleId("");
+                                }}
+                                title="Assign Vehicle"
+                                className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] transition-all cursor-pointer shadow-md glow-amber flex items-center gap-1"
+                              >
+                                <Car className="h-3 w-3" /> Pair
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -764,6 +1034,227 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
           </Card>
         )}
       </div>
+
+      {/* MODAL 1: Register New Driver Partner */}
+      {isRegisterModalOpen && (
+        <Dialog open={isRegisterModalOpen} onOpenChange={setIsRegisterModalOpen}>
+          <DialogContent className="max-w-md bg-[#0c101c] border-amber-500/30 text-white rounded-3xl p-6 shadow-2xl glow-amber z-[99999]">
+            <form onSubmit={handleRegisterDriver} className="space-y-4">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-extrabold text-amber-400 flex items-center gap-2">
+                  <UserPlus className="h-5 w-5" /> Register New Driver Partner
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs font-bold text-slate-300">Driver Partner Name *</Label>
+                  <Input
+                    required
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    placeholder="e.g. Ramesh Kumar"
+                    className="h-10 bg-slate-900 border-slate-800 text-white font-bold text-xs"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-slate-300">Mobile Phone Number *</Label>
+                  <Input
+                    required
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    placeholder="e.g. 9876543210"
+                    className="h-10 bg-slate-900 border-slate-800 text-white font-mono text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-bold text-slate-300">Driving License #</Label>
+                    <Input
+                      value={regLicense}
+                      onChange={(e) => setRegLicense(e.target.value)}
+                      placeholder="DL-14201100..."
+                      className="h-10 bg-slate-900 border-slate-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-bold text-slate-300">Aadhaar Card #</Label>
+                    <Input
+                      value={regAadhaar}
+                      onChange={(e) => setRegAadhaar(e.target.value)}
+                      placeholder="12-digit Aadhaar"
+                      className="h-10 bg-slate-900 border-slate-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-slate-300">Initial KYC Status</Label>
+                  <select
+                    value={regKycStatus}
+                    onChange={(e) => setRegKycStatus(e.target.value as "APPROVED" | "PENDING")}
+                    className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-white outline-none focus:border-amber-500"
+                  >
+                    <option value="APPROVED">APPROVED (Ready for immediate dispatch)</option>
+                    <option value="PENDING">PENDING (Awaiting document verification)</option>
+                  </select>
+                </div>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setIsRegisterModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading} className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs glow-amber">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : "Save Driver Partner"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* MODAL 2: Edit Driver Details */}
+      {editingDriver && (
+        <Dialog open={!!editingDriver} onOpenChange={() => setEditingDriver(null)}>
+          <DialogContent className="max-w-md bg-[#0c101c] border-amber-500/30 text-white rounded-3xl p-6 shadow-2xl z-[99999]">
+            <form onSubmit={handleUpdateDriver} className="space-y-4">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-extrabold text-white flex items-center gap-2">
+                  <Pencil className="h-5 w-5 text-amber-400" /> Edit Driver Profile &amp; KYC
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs font-bold text-slate-300">Driver Partner Name</Label>
+                  <Input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="h-10 bg-slate-900 border-slate-800 text-white font-bold text-xs"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-slate-300">Mobile Phone Number</Label>
+                  <Input
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="h-10 bg-slate-900 border-slate-800 text-white font-mono text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-bold text-slate-300">License Number</Label>
+                    <Input
+                      value={editLicense}
+                      onChange={(e) => setEditLicense(e.target.value)}
+                      className="h-10 bg-slate-900 border-slate-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-bold text-slate-300">Aadhaar Number</Label>
+                    <Input
+                      value={editAadhaar}
+                      onChange={(e) => setEditAadhaar(e.target.value)}
+                      className="h-10 bg-slate-900 border-slate-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-bold text-slate-300">KYC Status</Label>
+                    <select
+                      value={editKycStatus}
+                      onChange={(e) => setEditKycStatus(e.target.value as "PENDING" | "APPROVED" | "REJECTED")}
+                      className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-white outline-none"
+                    >
+                      <option value="APPROVED">APPROVED</option>
+                      <option value="PENDING">PENDING</option>
+                      <option value="REJECTED">REJECTED</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-bold text-slate-300">Wallet Balance (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editWalletBalance}
+                      onChange={(e) => setEditWalletBalance(e.target.value)}
+                      className="h-10 bg-slate-900 border-slate-800 text-emerald-400 font-bold text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setEditingDriver(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading} className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs glow-amber">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : "Update Driver"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* MODAL 3: View Driver Full Profile Telemetry */}
+      {viewingDriver && (
+        <Dialog open={!!viewingDriver} onOpenChange={() => setViewingDriver(null)}>
+          <DialogContent className="max-w-md bg-[#0c101c] border-slate-800 text-white rounded-3xl p-6 shadow-2xl z-[99999]">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-extrabold flex items-center gap-2 text-white">
+                <Users className="h-5 w-5 text-amber-400" /> {viewingDriver.name || "Driver Partner"}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-2 text-xs">
+              <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1.5">
+                <div className="flex justify-between"><span className="text-slate-400">Phone Mobile:</span> <span className="font-mono text-white font-bold">{viewingDriver.phone}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">KYC Status:</span> <Badge variant={viewingDriver.driverProfile?.kycStatus === "APPROVED" ? "success" : "warning"}>{viewingDriver.driverProfile?.kycStatus || "PENDING"}</Badge></div>
+                <div className="flex justify-between"><span className="text-slate-400">Rating:</span> <span className="text-amber-400 font-bold">⭐ {(viewingDriver.driverProfile?.rating || 5).toFixed(1)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">License Number:</span> <span className="font-mono text-slate-200">{viewingDriver.driverProfile?.licenseNumber || "N/A"}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Aadhaar Number:</span> <span className="font-mono text-slate-200">{viewingDriver.driverProfile?.aadhaarNumber || "N/A"}</span></div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Wallet Balance</span>
+                  <span className="text-lg font-black text-emerald-400">₹{viewingDriver.driverProfile?.walletBalance || 0}</span>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/30">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Earnings</span>
+                  <span className="text-lg font-black text-amber-400">₹{viewingDriver.driverProfile?.totalEarnings || 0}</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Assigned Vehicle</span>
+                {viewingDriver.vehicles.length > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <Car className="h-4 w-4 text-emerald-400" />
+                    <span className="font-mono font-extrabold text-amber-400">{viewingDriver.vehicles[0].regNumber}</span>
+                    <span className="text-slate-400">({viewingDriver.vehicles[0].modelName})</span>
+                  </div>
+                ) : (
+                  <span className="text-slate-500 italic">No vehicle linked currently</span>
+                )}
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setViewingDriver(null)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Quick Assign Vehicle Modal Dialog */}
       {assigningModalDriver && (
