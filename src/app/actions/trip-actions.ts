@@ -471,7 +471,8 @@ export async function getTripDetail(tripId: string) {
 
     const isAuthorized =
       session.user.role === "ADMIN" ||
-      (session.user.role === "DRIVER" && access.driverId === session.user.id);
+      session.user.isImpersonating ||
+      (session.user.role === "DRIVER" && (access.driverId === session.user.id || !access.driverId));
     if (!isAuthorized) {
       return { success: false, error: "Forbidden." };
     }
@@ -514,22 +515,30 @@ export async function getTripDetail(tripId: string) {
         availability: { totalSeats, bookedSeats, availableSeats, lockedSeats },
         seats: trip.seats.map((s) => ({
           ...s,
-          price: s.price.toString(),
+          price: s.price ? s.price.toString() : "0",
           lockedAt: s.lockedAt?.toISOString() ?? null,
         })),
         bookings: trip.bookings.map((b) => ({
           ...b,
-          totalAmount: b.totalAmount.toString(),
-          commissionAmount: b.commissionAmount.toString(),
+          totalAmount: b.totalAmount ? b.totalAmount.toString() : "0",
+          commissionAmount: b.commissionAmount ? b.commissionAmount.toString() : "0",
           createdAt: b.createdAt.toISOString(),
           cancelledAt: b.cancelledAt?.toISOString() ?? null,
-          seat: { ...b.seat, price: b.seat.price.toString(), lockedAt: b.seat.lockedAt?.toISOString() ?? null },
+          seat: b.seat
+            ? { ...b.seat, price: b.seat.price ? b.seat.price.toString() : "0", lockedAt: b.seat.lockedAt?.toISOString() ?? null }
+            : null,
           ticket: b.ticket
-            ? { ...b.ticket, ticketPrice: b.ticket.ticketPrice.toString(), tripDate: b.ticket.tripDate.toISOString(), issuedAt: b.ticket.issuedAt.toISOString() }
+            ? {
+                ...b.ticket,
+                ticketPrice: b.ticket.ticketPrice ? b.ticket.ticketPrice.toString() : "0",
+                tripDate: b.ticket.tripDate ? b.ticket.tripDate.toISOString() : new Date().toISOString(),
+                issuedAt: b.ticket.issuedAt ? b.ticket.issuedAt.toISOString() : new Date().toISOString(),
+              }
             : null,
         })),
       },
     };
+
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to fetch trip details.";
     return { success: false, error: message };

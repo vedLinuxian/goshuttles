@@ -57,7 +57,8 @@ export const navigationByRole: Record<Role, NavSection[]> = {
       { label: "Offline Booking", href: "/driver/offline-book", icon: Ticket },
     ] },
     { title: "Account", items: [
-      { label: "Earnings & Wallet", href: "/driver/earnings", icon: TrendingUp },
+      { label: "Earnings & Commission", href: "/driver/earnings", icon: TrendingUp },
+
       { label: "Notifications", href: "/driver/notifications", icon: Bell },
       { label: "Profile", href: "/driver/profile", icon: User },
     ] },

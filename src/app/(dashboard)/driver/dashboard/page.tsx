@@ -132,7 +132,7 @@ export default async function DriverDashboardPage() {
 
         <div className={`bg-slate-900/60 border rounded-2xl p-5 shadow-lg ${Number(driverProfile?.walletBalance ?? 0) < 0 ? "border-rose-500/30 bg-rose-500/5" : "border-slate-800/80"}`}>
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Wallet Balance</p>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Commission Settlement</p>
             <div className={`p-2 rounded-xl ${Number(driverProfile?.walletBalance ?? 0) < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"}`}>
               <CreditCard className="h-4 w-4" />
             </div>
@@ -142,12 +142,13 @@ export default async function DriverDashboardPage() {
           </p>
           {Number(driverProfile?.walletBalance ?? 0) < 0 ? (
             <p className="text-[10px] text-rose-400 mt-1 font-bold">
-              ⚠ ₹{Math.abs(Number(driverProfile?.walletBalance ?? 0)).toFixed(2)} Commission Due (Cash collected)
+              ⚠ ₹{Math.abs(Number(driverProfile?.walletBalance ?? 0)).toFixed(2)} Platform Fee Owed (Cash collected)
             </p>
           ) : (
             <p className="text-[10px] text-emerald-400 mt-1 font-medium">Net available payout balance</p>
           )}
         </div>
+
 
         <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg">
           <div className="flex items-center justify-between">

@@ -62,21 +62,22 @@ export default async function EarningsPage({
         >
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
             <Wallet className="h-4 w-4 text-amber-400" />
-            Platform Wallet Balance
+            Commission Settlement Ledger
           </div>
           <p className={`text-2xl font-extrabold ${
             Number(earnings.netEarnings) < 0 ? "text-rose-400" : "text-amber-400"
           }`}>
-            {Number(earnings.netEarnings) < 0 ? "-" : "+"}₹{Math.abs(Number(earnings.netEarnings))}
+            {Number(earnings.netEarnings) < 0 ? "-" : "+"}₹{Math.abs(Number(earnings.netEarnings)).toFixed(2)}
           </p>
           {Number(earnings.netEarnings) < 0 && (
             <p className="text-[10px] text-rose-400 mt-1 font-semibold">
-              ⚠ Commission owed to platform — settle at next payout
+              ⚠ ₹{Math.abs(Number(earnings.netEarnings)).toFixed(2)} Platform fee owed (Cash collected)
             </p>
           )}
           {Number(earnings.netEarnings) >= 0 && (
-            <p className="text-[10px] text-slate-500 mt-1">Net balance after all commissions</p>
+            <p className="text-[10px] text-slate-500 mt-1">Net payout balance available</p>
           )}
+
         </Card>
       </div>
 
