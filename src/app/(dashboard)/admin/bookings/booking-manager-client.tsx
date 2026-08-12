@@ -433,7 +433,7 @@ function BookingActions({
   booking: BookingItem;
   onOpenModal: (modal: ActionModalState) => void;
 }) {
-  const isPendingCash = booking.status === "PENDING" && booking.paymentMode === "CASH";
+  const isPendingCash = booking.paymentStatus === "PENDING" && booking.paymentMode === "CASH" && booking.status !== "CANCELLED";
   const canModify = ["PENDING", "CONFIRMED"].includes(booking.status);
 
   return (

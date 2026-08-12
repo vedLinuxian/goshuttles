@@ -4,7 +4,7 @@ import { getBookingById } from "@/lib/booking-service";
 import { cancelBookingForm } from "@/app/actions/form-actions";
 import { confirmPayment } from "./actions";
 import Link from "next/link";
-import { IndianRupee, XCircle, ArrowLeft, Ticket, CheckCircle2, Route, ShieldCheck } from "lucide-react";
+import { IndianRupee, XCircle, ArrowLeft, Ticket, CheckCircle2, Route, ShieldCheck, Banknote } from "lucide-react";
 import { TicketActions } from "@/components/tickets/ticket-actions";
 
 export default async function BookingDetailPage({ params }: { params: Promise<{ bookingId: string }> }) {
@@ -136,6 +136,31 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
               </Link>
             </div>
             <TicketActions ticketId={booking.ticket.id} />
+          </div>
+        )}
+
+        {booking.paymentStatus === "PENDING" && booking.paymentMode === "CASH" && (session.user.role === "ADMIN" || session.user.role === "DRIVER") && (
+
+          <div className="border-t border-slate-200 dark:border-slate-800/80 pt-4 space-y-3">
+            <div className="flex items-center gap-2 text-xs font-extrabold text-amber-500">
+              <Banknote className="h-4 w-4" />
+              <span>Admin / Driver Action Required</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Cash payment of <strong className="text-emerald-400">₹{Number(booking.totalGroupFare || booking.totalAmount).toLocaleString("en-IN")}</strong> is pending for this booking. Confirm cash collection below to issue official invoice and finalize ledger.
+            </p>
+            <form action={async () => {
+              "use server";
+              const { adminCollectCashAndIssueInvoice } = await import("@/app/actions/invoice-actions");
+              await adminCollectCashAndIssueInvoice(bookingId, "Collected via booking detail page");
+            }}>
+              <button
+                type="submit"
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-3 rounded-xl font-extrabold text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <Banknote className="h-4 w-4" /> Confirm Cash Collection &amp; Issue Invoice
+              </button>
+            </form>
           </div>
         )}
 

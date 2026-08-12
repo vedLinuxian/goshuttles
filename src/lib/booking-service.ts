@@ -459,7 +459,7 @@ export async function confirmBookingPayment(
     }
 
     const updateResult = await tx.booking.updateMany({
-      where: { id: bookingId, status: "PENDING" },
+      where: { id: bookingId, paymentStatus: "PENDING" },
       data: {
         status: "CONFIRMED",
         paymentStatus: "COLLECTED",
@@ -468,9 +468,10 @@ export async function confirmBookingPayment(
     });
     if (updateResult.count === 0) {
       const rechecked = await tx.booking.findUnique({ where: { id: bookingId } });
-      if (rechecked?.status === "CONFIRMED" || rechecked?.status === "COMPLETED") return rechecked;
-      throw new Error("Booking is no longer pending.");
+      if (rechecked?.paymentStatus === "COLLECTED") return rechecked;
+      throw new Error("Booking payment is already collected or ineligible.");
     }
+
 
     if (booking.seat) {
       await tx.tripSeat.updateMany({
