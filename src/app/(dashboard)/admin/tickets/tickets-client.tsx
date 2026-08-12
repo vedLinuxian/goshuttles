@@ -1,24 +1,27 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Ticket,
   ExternalLink,
-  Printer,
   Download,
-  Search,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   X,
   Filter,
-  Users,
   CalendarDays,
+  Banknote,
+  CheckCircle2,
+  Loader2,
+  Receipt,
 } from "lucide-react";
-import { Badge, Button, Card, Select } from "@/components/ui";
+import { Badge, Button, Card, Select, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui";
 import SearchBar from "@/components/ui/search-bar";
 import PaginationControls from "@/components/ui/pagination";
+import { adminTicketCollectCashAction } from "./ticket-actions";
 
 export type AdminTicketItem = {
   id: string;
@@ -67,6 +70,8 @@ type Props = {
 type SortField = "ticketNumber" | "passengerName" | "tripDate" | "issuedAt" | "seatNumber" | "status";
 type SortOrder = "asc" | "desc";
 
+type CollectModal = { bookingId: string; passengerName: string; amount?: number } | null;
+
 export function AdminTicketsClient({
   tickets,
   page,
@@ -78,8 +83,13 @@ export function AdminTicketsClient({
   cancelledCount,
   filters,
 }: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [sortField, setSortField] = useState<SortField>("issuedAt");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [collectModal, setCollectModal] = useState<CollectModal>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -94,34 +104,14 @@ export function AdminTicketsClient({
     return [...tickets].sort((a, b) => {
       let aVal: number | string = 0;
       let bVal: number | string = 0;
-
       switch (sortField) {
-        case "ticketNumber":
-          aVal = a.ticketNumber;
-          bVal = b.ticketNumber;
-          break;
-        case "passengerName":
-          aVal = a.passengerName.toLowerCase();
-          bVal = b.passengerName.toLowerCase();
-          break;
-        case "tripDate":
-          aVal = new Date(a.tripDate).getTime();
-          bVal = new Date(b.tripDate).getTime();
-          break;
-        case "issuedAt":
-          aVal = new Date(a.issuedAt).getTime();
-          bVal = new Date(b.issuedAt).getTime();
-          break;
-        case "seatNumber":
-          aVal = a.seatNumber || a.booking.seat?.seatNumber || "";
-          bVal = b.seatNumber || b.booking.seat?.seatNumber || "";
-          break;
-        case "status":
-          aVal = a.status;
-          bVal = b.status;
-          break;
+        case "ticketNumber": aVal = a.ticketNumber; bVal = b.ticketNumber; break;
+        case "passengerName": aVal = a.passengerName.toLowerCase(); bVal = b.passengerName.toLowerCase(); break;
+        case "tripDate": aVal = new Date(a.tripDate).getTime(); bVal = new Date(b.tripDate).getTime(); break;
+        case "issuedAt": aVal = new Date(a.issuedAt).getTime(); bVal = new Date(b.issuedAt).getTime(); break;
+        case "seatNumber": aVal = a.seatNumber || a.booking.seat?.seatNumber || ""; bVal = b.seatNumber || b.booking.seat?.seatNumber || ""; break;
+        case "status": aVal = a.status; bVal = b.status; break;
       }
-
       if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
       if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
       return 0;
@@ -130,16 +120,35 @@ export function AdminTicketsClient({
 
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 opacity-40 ml-1 inline" />;
-    return sortOrder === "asc" ? (
-      <ArrowUp className="h-3 w-3 text-amber-500 ml-1 inline font-bold" />
-    ) : (
-      <ArrowDown className="h-3 w-3 text-amber-500 ml-1 inline font-bold" />
-    );
+    return sortOrder === "asc"
+      ? <ArrowUp className="h-3 w-3 text-amber-500 ml-1 inline" />
+      : <ArrowDown className="h-3 w-3 text-amber-500 ml-1 inline" />;
   };
 
-  const hasActiveFilters = Boolean(
-    filters.q || filters.status || filters.date || filters.route || filters.paymentStatus
-  );
+  const hasActiveFilters = Boolean(filters.q || filters.status || filters.date || filters.route || filters.paymentStatus);
+
+  const handleCollectCash = async () => {
+    if (!collectModal) return;
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const res = await adminTicketCollectCashAction(collectModal.bookingId);
+      if (!res.success) throw new Error(res.error);
+      setActionSuccess("Cash collected! Ticket confirmed & PAID invoice generated.");
+      startTransition(() => router.refresh());
+      setTimeout(() => {
+        setCollectModal(null);
+        setActionSuccess(null);
+      }, 2000);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Collection failed.");
+    }
+  };
+
+  // Count pending cash bookings on this page
+  const pendingCashCount = tickets.filter(
+    (t) => t.booking.paymentMode === "CASH" && t.booking.paymentStatus === "PENDING"
+  ).length;
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6 pb-12">
@@ -160,6 +169,21 @@ export function AdminTicketsClient({
         </div>
       </div>
 
+      {/* Pending cash collection alert */}
+      {pendingCashCount > 0 && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+          <Banknote className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-extrabold text-amber-300">
+              {pendingCashCount} boarding pass{pendingCashCount > 1 ? "es" : ""} with uncollected cash on this page
+            </p>
+            <p className="text-xs text-amber-400/70 mt-0.5">
+              Use the <strong>Collect Cash</strong> button (green) in the Actions column to confirm collection and generate a PAID invoice.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Quick Status Filters */}
       <nav aria-label="Boarding pass status filters" className="flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
         {[
@@ -174,13 +198,24 @@ export function AdminTicketsClient({
             href={value ? `/admin/tickets?status=${value}` : "/admin/tickets"}
             className={`shrink-0 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${
               filters.status === value
-                ? "bg-amber-500 text-slate-950 shadow-md glow-amber"
+                ? "bg-amber-500 text-slate-950 shadow-md"
                 : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
             }`}
           >
             {label}
           </Link>
         ))}
+        {/* Quick filter for pending cash */}
+        <Link
+          href="/admin/tickets?paymentStatus=PENDING"
+          className={`shrink-0 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors flex items-center gap-1.5 ${
+            filters.paymentStatus === "PENDING"
+              ? "bg-amber-500 text-slate-950"
+              : "text-amber-500 hover:bg-amber-500/10 border border-amber-500/20"
+          }`}
+        >
+          <Banknote className="h-3.5 w-3.5" /> Cash Pending
+        </Link>
       </nav>
 
       {/* Advanced Filter Toolbar */}
@@ -188,32 +223,25 @@ export function AdminTicketsClient({
         method="get"
         className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_160px_160px_150px_120px_auto]"
       >
-        <SearchBar
-          placeholder="Search pass ref, passenger, or phone..."
-          className="min-w-0"
-          debounceMs={0}
-          navigateOnChange={false}
-        />
+        <SearchBar placeholder="Search pass ref, passenger, or phone..." className="min-w-0" debounceMs={0} navigateOnChange={false} />
         <input
           name="route"
           defaultValue={filters.route}
           placeholder="Route or city..."
-          aria-label="Filter by route or city"
           className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 outline-none focus:border-amber-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         />
         <input
           name="date"
           type="date"
           defaultValue={filters.date}
-          aria-label="Filter by departure date"
           className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 outline-none focus:border-amber-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         />
-        <Select name="paymentStatus" defaultValue={filters.paymentStatus} aria-label="Filter by payment status">
+        <Select name="paymentStatus" defaultValue={filters.paymentStatus}>
           <option value="">All Payments</option>
-          <option value="COLLECTED">Collected</option>
-          <option value="PENDING">Pending Cash/Proof</option>
+          <option value="COLLECTED">✅ Collected</option>
+          <option value="PENDING">⏳ Pending Cash/Proof</option>
         </Select>
-        <Select name="pageSize" defaultValue={String(pageSize)} aria-label="Passes per page">
+        <Select name="pageSize" defaultValue={String(pageSize)}>
           <option value="20">20 / page</option>
           <option value="50">50 / page</option>
           <option value="100">100 / page</option>
@@ -226,7 +254,7 @@ export function AdminTicketsClient({
           {hasActiveFilters && (
             <Link
               href="/admin/tickets"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
               title="Reset filters"
             >
               <X className="h-4 w-4" />
@@ -240,124 +268,191 @@ export function AdminTicketsClient({
         <Card variant="glass" className="p-12 text-center sm:p-16">
           <Ticket className="mx-auto h-12 w-12 text-amber-500/50" />
           <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">No boarding passes match this filter</h2>
-          <p className="mt-1 text-sm text-slate-500">Boarding passes appear automatically after cash confirmation or online payment approval.</p>
+          <p className="mt-1 text-sm text-slate-500">Boarding passes appear after cash confirmation or online payment approval.</p>
         </Card>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] text-left">
+            <table className="w-full min-w-[1100px] text-left">
               <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50">
                 <tr>
-                  <th className="px-5 py-3 text.left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    <button type="button" onClick={() => handleSort("ticketNumber")} className="hover:text-amber-500 font-bold transition-colors">
-                      Pass Ref {renderSortIcon("ticketNumber")}
-                    </button>
-                  </th>
-                  <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    <button type="button" onClick={() => handleSort("passengerName")} className="hover:text-amber-500 font-bold transition-colors">
-                      Passenger {renderSortIcon("passengerName")}
-                    </button>
-                  </th>
-                  <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    <button type="button" onClick={() => handleSort("tripDate")} className="hover:text-amber-500 font-bold transition-colors">
-                      Route / Departure {renderSortIcon("tripDate")}
-                    </button>
-                  </th>
-                  <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    <button type="button" onClick={() => handleSort("seatNumber")} className="hover:text-amber-500 font-bold transition-colors">
-                      Seat / Driver {renderSortIcon("seatNumber")}
-                    </button>
-                  </th>
-                  <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Payment
-                  </th>
+                  {[
+                    { field: "ticketNumber" as SortField, label: "Pass Ref" },
+                    { field: "passengerName" as SortField, label: "Passenger" },
+                    { field: "tripDate" as SortField, label: "Route / Departure" },
+                    { field: "seatNumber" as SortField, label: "Seat / Driver" },
+                  ].map(({ field, label }) => (
+                    <th key={field} className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      <button type="button" onClick={() => handleSort(field)} className="hover:text-amber-500 font-bold transition-colors">
+                        {label} {renderSortIcon(field)}
+                      </button>
+                    </th>
+                  ))}
+                  <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Payment</th>
                   <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     <button type="button" onClick={() => handleSort("status")} className="hover:text-amber-500 font-bold transition-colors">
                       Status {renderSortIcon("status")}
                     </button>
                   </th>
-                  <th className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Actions
-                  </th>
+                  <th className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
-                {sortedTickets.map((t) => (
-                  <tr key={t.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                    <td className="px-5 py-4">
-                      <p className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">{t.ticketNumber}</p>
-                      <p className="mt-1 text-[10px] text-slate-500">
-                        Issued: {new Date(t.issuedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
-                      </p>
-                      {t.usedAt && (
-                        <p className="mt-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          Boarded: {new Date(t.usedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                {sortedTickets.map((t) => {
+                  const isCashPending = t.booking.paymentMode === "CASH" && t.booking.paymentStatus === "PENDING";
+                  return (
+                    <tr key={t.id} className={`transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/30 ${isCashPending ? "bg-amber-500/3 dark:bg-amber-500/5" : ""}`}>
+                      <td className="px-5 py-4">
+                        <p className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">{t.ticketNumber}</p>
+                        <p className="mt-1 text-[10px] text-slate-500">
+                          Issued: {new Date(t.issuedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                         </p>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">{t.passengerName}</p>
-                      <p className="mt-1 text-[11px] text-slate-500 font-mono">
-                        {t.passengerPhone || t.booking.user?.phone || "No phone"}
-                      </p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-xs font-black text-slate-900 dark:text-white">{t.source} → {t.destination}</p>
-                      <p className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
-                        <CalendarDays className="h-3 w-3 text-amber-500" />
-                        {new Date(t.tripDate).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
-                      </p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-xs font-black text-slate-900 dark:text-white">Seat {t.seatNumber || t.booking.seat?.seatNumber || "-"}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">{t.booking.trip.driver?.name || "Unassigned driver"}</p>
-                    </td>
-                    <td className="px-5 py-4 text-xs text-slate-600 dark:text-slate-300">
-                      <p className="font-bold">{t.booking.paymentMode}</p>
-                      <p className="mt-1 text-[10px] text-amber-500">{t.booking.paymentStatus}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <PassStatusBadge status={t.status} />
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Link
-                          href={`/passenger/booking/${t.booking.id}`}
-                          title="View Passenger Booking Detail"
-                          aria-label={`View booking for ${t.passengerName}`}
-                          className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all group"
-                        >
-                          <ExternalLink className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                        </Link>
-                        <Link
-                          href={`/passenger/ticket/${t.id}`}
-                          title="View Digital Boarding Pass"
-                          aria-label={`View pass ${t.ticketNumber}`}
-                          className="p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-slate-950 border border-amber-500/30 transition-all group"
-                        >
-                          <Ticket className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                        </Link>
-                        <a
-                          href={`/api/tickets/${t.id}/pdf`}
-                          download={`${t.ticketNumber}.pdf`}
-                          title="Download Pass PDF"
-                          aria-label={`Download PDF pass ${t.ticketNumber}`}
-                          className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all group"
-                        >
-                          <Download className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        {t.usedAt && (
+                          <p className="mt-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            Boarded: {new Date(t.usedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">{t.passengerName}</p>
+                        <p className="mt-1 text-[11px] text-slate-500 font-mono">
+                          {t.passengerPhone || t.booking.user?.phone || "No phone"}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="text-xs font-black text-slate-900 dark:text-white">{t.source} → {t.destination}</p>
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
+                          <CalendarDays className="h-3 w-3 text-amber-500" />
+                          {new Date(t.tripDate).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="text-xs font-black text-slate-900 dark:text-white">Seat {t.seatNumber || t.booking.seat?.seatNumber || "-"}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">{t.booking.trip.driver?.name || "Unassigned driver"}</p>
+                      </td>
+                      <td className="px-5 py-4 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-extrabold ${t.booking.paymentMode === "CASH" ? "text-amber-500" : "text-indigo-400"}`}>
+                            {t.booking.paymentMode}
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                          {t.booking.paymentStatus === "PENDING" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded-md border border-rose-500/20">
+                              ⏳ PENDING
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
+                              ✅ COLLECTED
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <PassStatusBadge status={t.status} />
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* COLLECT CASH button — only for CASH + PENDING bookings */}
+                          {isCashPending && (
+                            <button
+                              type="button"
+                              title="Collect cash & confirm booking"
+                              onClick={() => {
+                                setActionError(null);
+                                setActionSuccess(null);
+                                setCollectModal({ bookingId: t.booking.id, passengerName: t.passengerName });
+                              }}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 text-[11px] font-extrabold transition-all shadow-md shadow-emerald-500/20"
+                            >
+                              <Banknote className="h-3.5 w-3.5" />
+                              Collect Cash
+                            </button>
+                          )}
+
+                          <Link
+                            href={`/passenger/booking/${t.booking.id}`}
+                            title="View Booking Detail"
+                            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all group"
+                          >
+                            <ExternalLink className="h-4 w-4 group-hover:scale-110 transition-transform" />
+                          </Link>
+                          <Link
+                            href={`/passenger/ticket/${t.id}`}
+                            title="View Digital Boarding Pass"
+                            className="p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-slate-950 border border-amber-500/30 transition-all group"
+                          >
+                            <Ticket className="h-4 w-4 group-hover:scale-110 transition-transform" />
+                          </Link>
+                          <a
+                            href={`/api/tickets/${t.id}/pdf`}
+                            download={`${t.ticketNumber}.pdf`}
+                            title="Download Pass PDF"
+                            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all group"
+                          >
+                            <Download className="h-4 w-4 group-hover:scale-110 transition-transform" />
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Pagination Controls */}
       <PaginationControls page={page} totalPages={totalPages} total={totalCount} pageSize={pageSize} />
+
+      {/* Collect Cash Confirmation Dialog */}
+      <Dialog open={Boolean(collectModal)} onOpenChange={(open) => !open && setCollectModal(null)}>
+        <DialogContent className="sm:max-w-md bg-[#0c101c] border-emerald-500/30 text-white rounded-3xl p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-400 font-extrabold flex items-center gap-2 text-lg">
+              <Banknote className="h-5 w-5" /> Confirm Cash Collection
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-sm mt-1">
+              Confirm that you have physically received the cash fare from passenger{" "}
+              <strong className="text-white">{collectModal?.passengerName}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="my-2 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-2 text-xs text-slate-300">
+            <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> Booking status → <strong className="text-white">CONFIRMED</strong></p>
+            <p className="flex items-center gap-2"><Ticket className="h-4 w-4 text-amber-400 shrink-0" /> Boarding ticket → <strong className="text-white">CONFIRMED</strong></p>
+            <p className="flex items-center gap-2"><Receipt className="h-4 w-4 text-indigo-400 shrink-0" /> PAID invoice → <strong className="text-white">Generated automatically</strong></p>
+          </div>
+
+          {actionError && (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+              {actionError}
+            </div>
+          )}
+          {actionSuccess && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" /> {actionSuccess}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="secondary" onClick={() => setCollectModal(null)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold gap-2"
+              onClick={handleCollectCash}
+              disabled={isPending}
+            >
+              {isPending ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+              ) : (
+                <><CheckCircle2 className="h-4 w-4" /> Confirm Cash Collected</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -373,12 +468,9 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: st
 
 function PassStatusBadge({ status }: { status: string }) {
   const variant =
-    status === "USED"
-      ? "success"
-      : status === "ISSUED"
-      ? "warning"
-      : status === "NO_SHOW"
-      ? "secondary"
-      : "destructive";
+    status === "USED" ? "success"
+    : status === "ISSUED" ? "warning"
+    : status === "NO_SHOW" ? "secondary"
+    : "destructive";
   return <Badge variant={variant}>{status.replace("_", " ")}</Badge>;
 }
