@@ -187,10 +187,12 @@ export function AdminTripsClient({ trips, page, pageSize, totalPages, totalCount
         <input name="date" type="date" defaultValue={filters.date} aria-label="Filter by departure date" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
         <Select name="status" defaultValue={filters.status} aria-label="Filter by trip status">
           <option value="">All trip statuses</option>
+          <option value="PENDING_APPROVAL">Pending Approval</option>
           <option value="SCHEDULED">Scheduled</option>
           <option value="IN_PROGRESS">In progress</option>
           <option value="COMPLETED">Completed</option>
           <option value="CANCELLED">Cancelled</option>
+          <option value="REJECTED">Declined</option>
         </Select>
         <Select name="pageSize" defaultValue={String(pageSize)} aria-label="Trips per page">
           <option value="20">20 per page</option>

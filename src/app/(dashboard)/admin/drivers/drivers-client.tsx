@@ -1,6 +1,7 @@
 "use client";
 
-import { Users, CheckCircle2, XCircle, Eye } from "lucide-react";
+import { useState } from "react";
+import { Users, CheckCircle2, XCircle, Eye, Edit3, ShieldAlert, Car, PhoneCall } from "lucide-react";
 import {
   Card,
   Button,
@@ -15,6 +16,7 @@ import {
 import SearchBar from "@/components/ui/search-bar";
 import PaginationControls from "@/components/ui/pagination";
 import { approveKycForm, rejectKycForm } from "@/app/actions/form-actions";
+import { EditDriverModal } from "./edit-driver-modal";
 import Link from "next/link";
 
 interface DriverItem {
@@ -52,8 +54,19 @@ export function DriversClient({
   totalCount,
   pageSize,
 }: DriversClientProps) {
+  const [editingDriver, setEditingDriver] = useState<DriverItem | null>(null);
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
+      {/* Edit Modal */}
+      {editingDriver && (
+        <EditDriverModal
+          driver={editingDriver}
+          isOpen={!!editingDriver}
+          onClose={() => setEditingDriver(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -130,39 +143,50 @@ export function DriversClient({
                       <TableCell className="font-bold text-xs text-amber-600 dark:text-amber-400">
                         {Number(d.driverProfile?.rating || 5).toFixed(1)} ★
                       </TableCell>
+
+                      {/* Icon-Only Command Buttons with Hover Tooltips */}
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           <Link
                             href={`/admin/drivers/${d.id}`}
-                            className="h-8 px-2.5 text-xs inline-flex items-center gap-1 border border-[var(--border)] hover:border-amber-500/50 text-[var(--foreground)] hover:text-amber-500 rounded-lg bg-[var(--muted)]/40 font-semibold transition-colors"
+                            title="View Driver Profile &amp; Manifest"
+                            className="p-2 rounded-xl border border-slate-700/80 bg-slate-900/90 text-slate-300 hover:text-amber-400 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all cursor-pointer"
                           >
-                            <Eye className="h-3.5 w-3.5" /> View Profile
+                            <Eye className="h-4 w-4" />
                           </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingDriver(d)}
+                            title="Edit Driver Profile Details"
+                            className="p-2 rounded-xl border border-slate-700/80 bg-slate-900/90 text-slate-300 hover:text-amber-400 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all cursor-pointer"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
 
                           {d.driverProfile && d.driverProfile.kycStatus !== "APPROVED" && (
                             <form action={approveKycForm} className="inline">
                               <input type="hidden" name="driverUserId" value={d.id} />
-                              <Button
+                              <button
                                 type="submit"
-                                size="sm"
-                                className="h-8 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1 rounded-lg cursor-pointer"
+                                title="Approve Driver KYC Verification"
+                                className="p-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 transition-all cursor-pointer"
                               >
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Approve
-                              </Button>
+                                <CheckCircle2 className="h-4 w-4" />
+                              </button>
                             </form>
                           )}
 
                           {d.driverProfile && d.driverProfile.kycStatus !== "REJECTED" && (
                             <form action={rejectKycForm} className="inline">
                               <input type="hidden" name="driverUserId" value={d.id} />
-                              <Button
+                              <button
                                 type="submit"
-                                size="sm"
-                                variant="destructive"
-                                className="h-8 px-2.5 text-xs gap-1 rounded-lg cursor-pointer"
+                                title="Reject Driver KYC Verification"
+                                className="p-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/60 transition-all cursor-pointer"
                               >
-                                <XCircle className="h-3.5 w-3.5" /> Reject
-                              </Button>
+                                <XCircle className="h-4 w-4" />
+                              </button>
                             </form>
                           )}
                         </div>
@@ -218,35 +242,44 @@ export function DriversClient({
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
                     <Link
                       href={`/admin/drivers/${d.id}`}
-                      className="h-8 px-2.5 text-xs inline-flex items-center gap-1 border border-[var(--border)] text-[var(--foreground)] hover:text-amber-500 rounded-lg bg-[var(--muted)]/40 font-semibold"
+                      title="View Driver Profile"
+                      className="p-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 hover:text-amber-400"
                     >
-                      <Eye className="h-3.5 w-3.5" /> View Profile
+                      <Eye className="h-4 w-4" />
                     </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditingDriver(d)}
+                      title="Edit Driver Profile Details"
+                      className="p-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 hover:text-amber-400"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </button>
 
                     {d.driverProfile && d.driverProfile.kycStatus !== "APPROVED" && (
                       <form action={approveKycForm} className="inline">
                         <input type="hidden" name="driverUserId" value={d.id} />
-                        <Button
+                        <button
                           type="submit"
-                          size="sm"
-                          className="h-8 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1 rounded-lg"
+                          title="Approve Driver KYC"
+                          className="p-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Approve
-                        </Button>
+                          <CheckCircle2 className="h-4 w-4" />
+                        </button>
                       </form>
                     )}
 
                     {d.driverProfile && d.driverProfile.kycStatus !== "REJECTED" && (
                       <form action={rejectKycForm} className="inline">
                         <input type="hidden" name="driverUserId" value={d.id} />
-                        <Button
+                        <button
                           type="submit"
-                          size="sm"
-                          variant="destructive"
-                          className="h-8 px-2.5 text-xs gap-1 rounded-lg"
+                          title="Reject Driver KYC"
+                          className="p-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400"
                         >
-                          <XCircle className="h-3.5 w-3.5" /> Reject
-                        </Button>
+                          <XCircle className="h-4 w-4" />
+                        </button>
                       </form>
                     )}
                   </div>

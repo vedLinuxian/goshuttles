@@ -53,7 +53,30 @@ export function NotificationBell({ userId, userRole }: NotificationBellProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<BellNotification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pushStatus, setPushStatus] = useState<"default" | "granted" | "denied" | "unsupported">("unsupported");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const prevUnreadRef = useRef(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setPushStatus(Notification.permission);
+    }
+  }, []);
+
+  const requestPushPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    try {
+      const permission = await Notification.requestPermission();
+      setPushStatus(permission);
+      if (permission === "granted") {
+        new Notification("GoShuttles Notifications Enabled", {
+          body: "You will now receive real-time push alerts for shuttle departures and bookings.",
+        });
+      }
+    } catch (err) {
+      console.error("Push permission error:", err);
+    }
+  };
 
   const fetchBell = useCallback(async () => {
     if (!userId) return;
@@ -63,22 +86,42 @@ export function NotificationBell({ userId, userRole }: NotificationBellProps) {
       });
       if (res.ok) {
         const data = await res.json();
-        setUnreadCount(data.unreadCount ?? 0);
-        setNotifications(data.notifications ?? []);
+        const newUnread = data.unreadCount ?? 0;
+        const newNotifs: BellNotification[] = data.notifications ?? [];
+        
+        // Trigger browser native push if unread count increased
+        if (
+          newUnread > prevUnreadRef.current &&
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted" &&
+          newNotifs.length > 0
+        ) {
+          const latest = newNotifs[0];
+          if (latest && !latest.isRead) {
+            new Notification(latest.title, {
+              body: latest.message,
+            });
+          }
+        }
+
+        prevUnreadRef.current = newUnread;
+        setUnreadCount(newUnread);
+        setNotifications(newNotifs);
       }
     } catch {
       // Non-blocking fallback
     }
   }, [userId]);
 
-  // Fetch immediately on mount and poll every 15 seconds
+  // Fetch immediately on mount and poll every 10 seconds for real-time responsiveness
   useEffect(() => {
     const initialFetch = window.setTimeout(() => {
       void fetchBell();
     }, 0);
     const interval = window.setInterval(() => {
       void fetchBell();
-    }, 15000);
+    }, 10000);
     return () => {
       window.clearTimeout(initialFetch);
       window.clearInterval(interval);
@@ -153,25 +196,51 @@ export function NotificationBell({ userId, userRole }: NotificationBellProps) {
           className="glass-card-dark absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-3xl border border-[var(--border)] shadow-2xl glow-amber sm:w-96"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--muted)] px-4 py-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs font-extrabold text-[var(--foreground)]">Notifications</h3>
+          <div className="flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--muted)] px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-extrabold text-[var(--foreground)]">Notifications</h3>
+                {unreadCount > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    {unreadCount} new
+                  </span>
+                )}
+              </div>
               {unreadCount > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  {unreadCount} new
-                </span>
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                  role="menuitem"
+                >
+                  <Check className="h-3 w-3" />
+                  Mark all read
+                </button>
               )}
             </div>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={handleMarkAllRead}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
-                role="menuitem"
-              >
-                <Check className="h-3 w-3" />
-                Mark all read
-              </button>
+
+            {/* Browser Push Permission Controls */}
+            {pushStatus !== "unsupported" && (
+              <div className="flex items-center justify-between pt-1 border-t border-[var(--border)]/50">
+                <span className="text-[10px] text-slate-400 font-semibold">Desktop Push Alerts</span>
+                {pushStatus === "granted" ? (
+                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    <Check className="h-3 w-3 text-emerald-400" /> Push Active
+                  </span>
+                ) : pushStatus === "denied" ? (
+                  <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                    Push Blocked
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={requestPushPermission}
+                    className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-0.5 rounded-lg transition-all cursor-pointer"
+                  >
+                    Enable Push
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -191,10 +260,13 @@ export function NotificationBell({ userId, userRole }: NotificationBellProps) {
             ) : (
               notifications.map((n) => {
                 const Icon = CATEGORY_ICONS[n.category] || Info;
+                const destUrl = (n as unknown as { targetUrl?: string }).targetUrl || notifPath;
                 return (
-                  <div
+                  <Link
                     key={n.id}
-                    className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--muted)] ${
+                    href={destUrl}
+                    onClick={() => setOpen(false)}
+                    className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--muted)] cursor-pointer ${
                       !n.isRead ? "bg-amber-500/10" : ""
                     }`}
                   >
@@ -208,14 +280,14 @@ export function NotificationBell({ userId, userRole }: NotificationBellProps) {
                       <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-[var(--muted-foreground)]">
                         {n.message}
                       </p>
-                      <span className="mt-1 block text-[10px] text-[var(--muted-foreground)]">
+                      <span className="mt-1 block text-[10px] text-[var(--muted-foreground)] font-mono">
                         {timeAgo(n.createdAt)}
                       </span>
                     </div>
                     {!n.isRead && (
                       <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-1.5 animate-pulse" />
                     )}
-                  </div>
+                  </Link>
                 );
               })
             )}

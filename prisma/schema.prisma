@@ -30,6 +30,7 @@ model User {
   passengerProfile   PassengerProfile?
   vehicles           Vehicle[]
   assignedTrips      Trip[]                @relation("AssignedDriver")
+  requestedTrips     Trip[]                @relation("TripRequestedBy")
   tripOverrides      Trip[]                @relation("OverrideApprover")
   bookings           Booking[]
   complaints         Complaint[]
@@ -171,28 +172,32 @@ model Trip {
   vehicleId            String     @map("vehicle_id")
   sourceId             String     @map("source_id")
   destinationId        String     @map("dest_id")
-  driverId             String?    @map("driver_id")
-  startTime            DateTime   @map("start_time")
-  actualStartTime      DateTime?  @map("actual_start_time")
-  actualEndTime        DateTime?  @map("actual_end_time")
-  status               TripStatus @default(SCHEDULED)
-  manifestLocked       Boolean    @default(false) @map("manifest_locked")
-  currentLat           Decimal?   @map("current_lat")
-  currentLong          Decimal?   @map("current_long")
-  lastLocationUpdate   DateTime?  @map("last_location_update")
-  adminOverrideStart   Boolean    @default(false) @map("admin_override_start")
-  overrideApprovedById String?    @map("override_approved_by")
-  overrideApprovedAt   DateTime?  @map("override_approved_at")
-  overrideReason       String?    @map("override_reason")
-  totalFare            Decimal    @default(0) @map("total_fare")
-  tripSequence         Int        @default(0) @map("trip_sequence")
-  isCancelled          Boolean    @default(false) @map("is_cancelled")
-  cancellationReason   String?    @map("cancellation_reason")
+  driverId             String?        @map("driver_id")
+  requestedById        String?        @map("requested_by_id")
+  approvalStatus       ApprovalStatus @default(APPROVED) @map("approval_status")
+  rejectionReason      String?        @map("rejection_reason")
+  startTime            DateTime       @map("start_time")
+  actualStartTime      DateTime?      @map("actual_start_time")
+  actualEndTime        DateTime?      @map("actual_end_time")
+  status               TripStatus     @default(SCHEDULED)
+  manifestLocked       Boolean        @default(false) @map("manifest_locked")
+  currentLat           Decimal?       @map("current_lat")
+  currentLong          Decimal?       @map("current_long")
+  lastLocationUpdate   DateTime?      @map("last_location_update")
+  adminOverrideStart   Boolean        @default(false) @map("admin_override_start")
+  overrideApprovedById String?        @map("override_approved_by")
+  overrideApprovedAt   DateTime?      @map("override_approved_at")
+  overrideReason       String?        @map("override_reason")
+  totalFare            Decimal        @default(0) @map("total_fare")
+  tripSequence         Int            @default(0) @map("trip_sequence")
+  isCancelled          Boolean        @default(false) @map("is_cancelled")
+  cancellationReason   String?        @map("cancellation_reason")
 
   vehicle          Vehicle  @relation(fields: [vehicleId], references: [id])
   source           Location @relation("SourceLocation", fields: [sourceId], references: [id])
   destination      Location @relation("DestLocation", fields: [destinationId], references: [id])
   driver           User?    @relation("AssignedDriver", fields: [driverId], references: [id])
+  requestedBy      User?    @relation("TripRequestedBy", fields: [requestedById], references: [id])
   overrideApprover User?    @relation("OverrideApprover", fields: [overrideApprovedById], references: [id])
 
   seats    TripSeat[]
@@ -203,6 +208,7 @@ model Trip {
   @@index([status, startTime])
   @@index([vehicleId, startTime])
   @@index([driverId, status])
+  @@index([approvalStatus, status])
   @@index([driverId])
   @@index([vehicleId])
   @@index([sourceId])
@@ -212,10 +218,18 @@ model Trip {
 }
 
 enum TripStatus {
+  PENDING_APPROVAL
   SCHEDULED
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model VehicleSeatTemplate {

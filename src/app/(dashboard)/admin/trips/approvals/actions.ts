@@ -63,3 +63,26 @@ export async function approveTripOverride(tripId: string, reason: string) {
   revalidatePath("/admin/trips/approvals");
 }
 
+export async function approveDriverTripRequestAction(tripId: string) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Unauthorized");
+  const { approveTripRequest } = await import("@/lib/trip-service");
+  await approveTripRequest(tripId, session.user.id);
+  revalidatePath("/admin/trips/approvals");
+  revalidatePath("/admin/trips");
+  revalidatePath("/driver/trips");
+}
+
+export async function rejectDriverTripRequestAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Unauthorized");
+  const tripId = formData.get("tripId") as string;
+  const reason = (formData.get("reason") as string) || "Declined by operator";
+  if (!tripId) throw new Error("Trip ID is required");
+  const { rejectTripRequest } = await import("@/lib/trip-service");
+  await rejectTripRequest(tripId, session.user.id, reason);
+  revalidatePath("/admin/trips/approvals");
+  revalidatePath("/admin/trips");
+  revalidatePath("/driver/trips");
+}
+

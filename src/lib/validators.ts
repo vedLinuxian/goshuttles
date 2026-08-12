@@ -33,11 +33,30 @@ export const bookingStatusSchema = z.enum([
 ]);
 
 export const tripStatusSchema = z.enum([
+  "PENDING_APPROVAL",
   "SCHEDULED",
   "IN_PROGRESS",
   "COMPLETED",
   "CANCELLED",
+  "REJECTED",
 ]);
+
+export const approvalStatusSchema = z.enum([
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+]);
+
+export const approveTripRequestSchema = z.object({
+  tripId: z.string().uuid("Invalid trip ID"),
+  driverId: z.string().uuid("Invalid driver ID").optional(),
+  vehicleId: z.string().uuid("Invalid vehicle ID").optional(),
+});
+
+export const rejectTripRequestSchema = z.object({
+  tripId: z.string().uuid("Invalid trip ID"),
+  reason: z.string().trim().min(3, "Rejection reason must be at least 3 characters").max(500, "Reason too long"),
+});
 
 export const emailSchema = z
   .string()
@@ -200,6 +219,7 @@ export const tripSchedulingSchema = z
     vehicleId: z.string().uuid("Invalid vehicle selection"),
     sourceId: z.string().uuid("Invalid source location"),
     destinationId: z.string().uuid("Invalid destination location"),
+    driverId: z.string().uuid("Invalid driver ID").optional().or(z.literal("")),
     startTime: z.string().refine(
       (val) => {
         const d = new Date(val);

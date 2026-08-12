@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Link2, Car, User, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
-import { Badge, Button } from "@/components/ui";
+import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { assignVehicleToDriverAction, unassignVehicleAction } from "@/app/actions/vehicle-actions";
+import { Link2, Car, UserCheck, CheckCircle2, AlertCircle, ShieldAlert, ArrowRight, XCircle, Loader2, Trash2 } from "lucide-react";
+import { Badge, Button, Card, SearchableSelect, type SearchableOption } from "@/components/ui";
 
 interface Driver {
   id: string;
@@ -29,221 +31,290 @@ interface AssignVehicleClientProps {
 }
 
 export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientProps) {
-  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const router = useRouter();
+  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [unassigningVehicleId, setUnassigningVehicleId] = useState<string | null>(null);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const selectedDriver = useMemo(
+    () => drivers.find((d) => d.id === selectedDriverId),
+    [drivers, selectedDriverId]
+  );
+
+  const selectedVehicle = useMemo(
+    () => vehicles.find((v) => v.id === selectedVehicleId),
+    [vehicles, selectedVehicleId]
+  );
+
+  // Driver options for SearchableSelect
+  const driverOptions: SearchableOption[] = useMemo(
+    () =>
+      drivers.map((d) => {
+        const hasAssignedVehicle = d.vehicles.length > 0;
+        const currentReg = hasAssignedVehicle ? d.vehicles[0].regNumber : null;
+        return {
+          value: d.id,
+          label: d.name || "Driver Partner",
+          description: `Phone: ${d.phone} · ${currentReg ? `Currently Assigned: ${currentReg}` : "Unassigned Fleet"}`,
+          badge: hasAssignedVehicle ? `Linked: ${currentReg}` : "Available",
+          icon: UserCheck,
+        };
+      }),
+    [drivers]
+  );
+
+  // Vehicle options for SearchableSelect
+  const vehicleOptions: SearchableOption[] = useMemo(
+    () =>
+      vehicles.map((v) => {
+        const isDriverOwned = v.owner?.phone && drivers.some((d) => d.id === v.ownerId);
+        return {
+          value: v.id,
+          label: `${v.regNumber} — ${v.modelName}`,
+          description: `${v.capacity} Seats · Owner: ${v.owner?.name || "Company Fleet"}`,
+          badge: isDriverOwned ? `Assigned to: ${v.owner.name}` : "Company Fleet",
+          icon: Car,
+        };
+      }),
+    [vehicles, drivers]
+  );
 
   async function handleAssign() {
     if (!selectedDriver || !selectedVehicle) return;
     setLoading(true);
     setResult(null);
+
     try {
-      const res = await fetch("/api/admin/assign-vehicle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId: selectedDriver.id, vehicleId: selectedVehicle.id }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setResult({ success: true, message: `Vehicle ${selectedVehicle.regNumber} assigned to ${selectedDriver.name || "driver"}.` });
-        setSelectedDriver(null);
-        setSelectedVehicle(null);
-        window.location.reload();
+      const res = await assignVehicleToDriverAction(selectedVehicle.id, selectedDriver.id);
+      if (res.success) {
+        setResult({
+          success: true,
+          message: `Vehicle ${selectedVehicle.regNumber} successfully assigned exclusively to ${selectedDriver.name || "driver"}.`,
+        });
+        setSelectedDriverId("");
+        setSelectedVehicleId("");
+        router.refresh();
       } else {
-        setResult({ success: false, message: data.error || "Assignment failed." });
+        setResult({ success: false, message: res.error || "Assignment failed." });
       }
-    } catch {
-      setResult({ success: false, message: "Network error. Please try again." });
+    } catch (err: unknown) {
+      setResult({
+        success: false,
+        message: err instanceof Error ? err.message : "An unexpected error occurred.",
+      });
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleUnassign(vehicleId: string) {
+    setUnassigningVehicleId(vehicleId);
+    try {
+      const res = await unassignVehicleAction(vehicleId);
+      if (res.success) {
+        setResult({
+          success: true,
+          message: "Vehicle unassigned and returned to company fleet.",
+        });
+        router.refresh();
+      } else {
+        setResult({ success: false, message: res.error || "Unassignment failed." });
+      }
+    } catch (err: unknown) {
+      setResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Failed to unassign vehicle.",
+      });
+    } finally {
+      setUnassigningVehicleId(null);
+    }
+  }
+
   return (
     <div className="max-w-[1400px] mx-auto space-y-6 pb-12">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--foreground)] tracking-tight flex items-center gap-2.5">
-          <Link2 className="h-7 w-7 text-amber-500" />
-          Assign Vehicle to Driver
-        </h1>
-        <p className="text-xs sm:text-sm text-[var(--muted-foreground)] mt-1">Select a driver partner and a shuttle vehicle to link their operational assignment</p>
+      {/* Page Title */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--foreground)] tracking-tight flex items-center gap-2.5">
+            <Link2 className="h-7 w-7 text-amber-500" />
+            1-to-1 Vehicle &amp; Driver Fleet Assignment
+          </h1>
+          <p className="text-xs sm:text-sm text-[var(--muted-foreground)] mt-1">
+            Enforce strict 1:1 driver-to-vehicle allocation across your shuttle operations.
+          </p>
+        </div>
       </div>
 
       {result && (
-        <div className={`flex items-center gap-2.5 p-4 rounded-xl border text-xs font-bold ${
-          result.success
-            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-            : "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400"
-        }`}>
-          {result.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
-          {result.message}
+        <div
+          className={`flex items-center gap-2.5 p-4 rounded-2xl border text-xs font-bold shadow-md ${
+            result.success
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}
+        >
+          {result.success ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+          )}
+          <span>{result.message}</span>
         </div>
       )}
 
-      {/* Step Selection Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Driver Selection */}
-        <div className="bg-[var(--card)] border border-[var(--border)] backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
-          <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--muted)]/50">
-            <p className="text-xs font-bold text-[var(--foreground)] flex items-center gap-2 uppercase tracking-wider">
-              <User className="h-4 w-4 text-amber-500" />
-              Step 1: Select Driver Partner
-            </p>
-          </div>
-          <div className="divide-y divide-[var(--border)] max-h-[400px] overflow-y-auto">
-            {drivers.length === 0 ? (
-              <p className="text-center text-[var(--muted-foreground)] py-8 text-xs">No active drivers found</p>
-            ) : (
-              drivers.map((driver) => (
-                <button
-                  key={driver.id}
-                  onClick={() => setSelectedDriver(driver)}
-                  className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors cursor-pointer ${
-                    selectedDriver?.id === driver.id
-                      ? "bg-amber-500/15 border-l-4 border-amber-500"
-                      : "hover:bg-[var(--muted)]/40 text-[var(--foreground)]"
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-extrabold text-[var(--foreground)]">{driver.name || "Unnamed Driver"}</p>
-                    <p className="text-[11px] text-[var(--muted-foreground)] mt-0.5">
-                      {driver.phone} • KYC: {driver.driverProfile?.kycStatus || "PENDING"}
-                    </p>
-                    <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
-                      {driver.vehicles.length} vehicle(s) assigned
-                    </p>
-                  </div>
-                  {selectedDriver?.id === driver.id && (
-                    <CheckCircle2 className="h-5 w-5 text-amber-500 shrink-0" />
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Vehicle Selection */}
-        <div className="bg-[var(--card)] border border-[var(--border)] backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
-          <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--muted)]/50">
-            <p className="text-xs font-bold text-[var(--foreground)] flex items-center gap-2 uppercase tracking-wider">
-              <Car className="h-4 w-4 text-amber-500" />
-              Step 2: Select Shuttle Vehicle
-            </p>
-          </div>
-          <div className="divide-y divide-[var(--border)] max-h-[400px] overflow-y-auto">
-            {vehicles.length === 0 ? (
-              <p className="text-center text-[var(--muted-foreground)] py-8 text-xs">No vehicles found</p>
-            ) : (
-              vehicles.map((vehicle) => (
-                <button
-                  key={vehicle.id}
-                  onClick={() => setSelectedVehicle(vehicle)}
-                  className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors cursor-pointer ${
-                    selectedVehicle?.id === vehicle.id
-                      ? "bg-amber-500/15 border-l-4 border-amber-500"
-                      : "hover:bg-[var(--muted)]/40 text-[var(--foreground)]"
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-extrabold font-mono text-amber-600 dark:text-amber-400">{vehicle.regNumber}</p>
-                    <p className="text-[11px] text-[var(--muted-foreground)] mt-0.5">
-                      {vehicle.modelName} • {vehicle.vehicleType} • {vehicle.capacity} seats
-                    </p>
-                    <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
-                      Owner: {vehicle.owner.name || "System"} ({vehicle.owner.phone})
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={vehicle.isActive ? "success" : "destructive"}>
-                      {vehicle.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                    {selectedVehicle?.id === vehicle.id && (
-                      <CheckCircle2 className="h-5 w-5 text-amber-500 shrink-0" />
-                    )}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
+      {/* Strict Rule Notice Card */}
+      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold flex items-center gap-3">
+        <ShieldAlert className="h-5 w-5 shrink-0 text-amber-400" />
+        <span>
+          <strong>Exclusive Assignment Guard:</strong> Each driver partner can only be linked to <strong>one</strong> shuttle vehicle at a time. Assigning a new vehicle automatically releases any previously assigned vehicle back to the company fleet.
+        </span>
       </div>
 
-      {/* Assignment Confirmation Card */}
-      {selectedDriver && selectedVehicle && (
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-xl space-y-4">
-          <p className="text-xs font-extrabold text-[var(--foreground)] uppercase tracking-wider">Assignment Confirmation</p>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="flex-1 bg-[var(--muted)]/40 border border-[var(--border)] p-4 rounded-xl">
-              <p className="text-[11px] text-[var(--muted-foreground)] font-semibold">Driver Partner</p>
-              <p className="text-xs font-bold text-[var(--foreground)] mt-0.5">{selectedDriver.name}</p>
-              <p className="text-[11px] text-[var(--muted-foreground)]">{selectedDriver.phone}</p>
-            </div>
-            <ArrowRight className="h-5 w-5 text-amber-500 shrink-0 hidden sm:block" />
-            <div className="flex-1 bg-[var(--muted)]/40 border border-[var(--border)] p-4 rounded-xl">
-              <p className="text-[11px] text-[var(--muted-foreground)] font-semibold">Shuttle Vehicle</p>
-              <p className="text-xs font-bold text-amber-600 dark:text-amber-400 font-mono mt-0.5">{selectedVehicle.regNumber}</p>
-              <p className="text-[11px] text-[var(--muted-foreground)]">{selectedVehicle.modelName} • {selectedVehicle.capacity} seats</p>
-            </div>
-            <Button
-              onClick={handleAssign}
-              disabled={loading}
-              className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2 cursor-pointer h-12"
-            >
-              <Link2 className="h-4 w-4" />
-              {loading ? "Assigning..." : "Confirm Vehicle Assignment"}
-            </Button>
+      {/* Interactive Assignment Card */}
+      <Card variant="glass" className="p-6 border-slate-800 shadow-2xl space-y-6 glow-amber">
+        <h2 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+          <Link2 className="h-4 w-4 text-amber-400" /> Link Vehicle to Driver
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Driver Combobox */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300">Select Driver Partner</label>
+            <SearchableSelect
+              options={driverOptions}
+              value={selectedDriverId}
+              onChange={setSelectedDriverId}
+              placeholder="Search driver by name or phone..."
+              searchPlaceholder="Type name or phone..."
+            />
+          </div>
+
+          {/* Vehicle Combobox */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300">Select Shuttle Vehicle</label>
+            <SearchableSelect
+              options={vehicleOptions}
+              value={selectedVehicleId}
+              onChange={setSelectedVehicleId}
+              placeholder="Search vehicle by reg number or model..."
+              searchPlaceholder="Type registration number or model..."
+            />
           </div>
         </div>
-      )}
 
-      {/* Current Assignments Table */}
-      <div className="bg-[var(--card)] border border-[var(--border)] backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
-        <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--muted)]/50">
-          <h2 className="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider">Current Driver-Vehicle Links</h2>
-        </div>
+        {/* Confirmation Toolbar */}
+        {selectedDriver && selectedVehicle && (
+          <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono font-black text-sm">
+                {selectedVehicle.regNumber}
+              </div>
+              <div>
+                <p className="text-xs font-extrabold text-white">
+                  Assigning {selectedVehicle.modelName} ({selectedVehicle.capacity} seats)
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Target Driver: <span className="text-amber-400 font-bold">{selectedDriver.name || "Driver"}</span> ({selectedDriver.phone})
+                </p>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              disabled={loading}
+              onClick={handleAssign}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs px-6 py-2.5 rounded-xl shadow-lg glow-amber cursor-pointer"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Updating Assignment...
+                </>
+              ) : (
+                "Confirm 1:1 Assignment"
+              )}
+            </Button>
+          </div>
+        )}
+      </Card>
+
+      {/* Fleet Assignments Directory Table */}
+      <Card variant="glass" className="p-6 border-slate-800 shadow-2xl space-y-4">
+        <h2 className="text-xs font-extrabold text-white uppercase tracking-wider">
+          Active Fleet Driver Assignments
+        </h2>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50">
-                <th className="px-6 py-3 text-[11px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Driver Partner</th>
-                <th className="px-6 py-3 text-[11px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Phone</th>
-                <th className="px-6 py-3 text-[11px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">KYC Status</th>
-                <th className="px-6 py-3 text-[11px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Assigned Vehicles</th>
+              <tr className="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <th className="py-3 px-4">Driver Partner</th>
+                <th className="py-3 px-4">Phone Number</th>
+                <th className="py-3 px-4">KYC Status</th>
+                <th className="py-3 px-4">Assigned Vehicle</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {drivers.map((driver) => (
-                <tr key={driver.id} className="hover:bg-[var(--muted)]/40 transition-colors">
-                  <td className="px-6 py-3.5 text-xs font-bold text-[var(--foreground)]">{driver.name || "—"}</td>
-                  <td className="px-6 py-3.5 text-xs text-[var(--muted-foreground)] font-mono">{driver.phone}</td>
-                  <td className="px-6 py-3.5">
-                    <Badge variant={
-                      driver.driverProfile?.kycStatus === "APPROVED" ? "success" :
-                      driver.driverProfile?.kycStatus === "REJECTED" ? "destructive" : "warning"
-                    }>
-                      {driver.driverProfile?.kycStatus || "PENDING"}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-3.5">
-                    {driver.vehicles.length === 0 ? (
-                      <span className="text-xs text-[var(--muted-foreground)] italic">No vehicles assigned</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {driver.vehicles.map((v) => (
-                          <span key={v.id} className="text-[11px] font-mono border border-[var(--border)] bg-[var(--muted)]/50 px-2 py-0.5 rounded text-amber-600 dark:text-amber-400 font-bold">
-                            {v.regNumber}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-slate-800/60">
+              {drivers.map((driver) => {
+                const assignedVehicle = driver.vehicles[0];
+                return (
+                  <tr key={driver.id} className="hover:bg-slate-900/50 transition-colors">
+                    <td className="py-3.5 px-4 text-xs font-bold text-white">
+                      {driver.name || "Driver Partner"}
+                    </td>
+                    <td className="py-3.5 px-4 text-xs font-mono text-slate-300">
+                      {driver.phone}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <Badge
+                        variant={
+                          driver.driverProfile?.kycStatus === "APPROVED"
+                            ? "success"
+                            : driver.driverProfile?.kycStatus === "REJECTED"
+                            ? "destructive"
+                            : "warning"
+                        }
+                      >
+                        {driver.driverProfile?.kycStatus || "PENDING"}
+                      </Badge>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {assignedVehicle ? (
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-xs font-extrabold">
+                          <Car className="h-3.5 w-3.5" />
+                          <span>{assignedVehicle.regNumber} — {assignedVehicle.modelName}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500 italic">No vehicle assigned (Company Fleet)</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      {assignedVehicle && (
+                        <button
+                          type="button"
+                          disabled={unassigningVehicleId === assignedVehicle.id}
+                          onClick={() => handleUnassign(assignedVehicle.id)}
+                          title="Unassign Vehicle and Return to Fleet"
+                          className="p-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all cursor-pointer"
+                        >
+                          {unassigningVehicleId === assignedVehicle.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

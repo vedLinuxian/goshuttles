@@ -94,7 +94,7 @@ function seatsForRoute(sourceName: string, destName: string) {
 
 export async function createTrip(
   input: z.infer<typeof createTripSchema>
-): Promise<ActionResult<{ tripId: string }>> {
+): Promise<ActionResult<{ tripId: string; isPendingApproval?: boolean }>> {
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     return { success: false, error: "Unauthorized — please sign in." };
@@ -105,7 +105,6 @@ export async function createTrip(
     return { success: false, error: "Only drivers and admins can create trips." };
   }
 
-  // Validate input
   const parsed = createTripSchema.safeParse(input);
   if (!parsed.success) {
     const firstError = parsed.error.issues[0];
@@ -113,8 +112,6 @@ export async function createTrip(
   }
 
   const { vehicleId, sourceId, destinationId, startTime: startTimeStr } = parsed.data;
-  // BUG-010 FIX: datetime-local has no timezone — append IST offset (+05:30) so the
-  // server stores the correct UTC equivalent of the Indian local time the driver selected.
   const startTime = new Date(
     startTimeStr.includes('+') || startTimeStr.includes('Z')
       ? startTimeStr
@@ -122,33 +119,39 @@ export async function createTrip(
   );
 
   try {
-    // Past-time check
     if (isNaN(startTime.getTime()) || startTime.getTime() <= Date.now()) {
       return { success: false, error: "Trip departure time must be in the future." };
     }
 
-    // Verify vehicle is active
     const vehicle = await db.vehicle.findUnique({
       where: { id: vehicleId },
-      include: { owner: { select: { id: true, isActive: true, driverProfile: { select: { kycStatus: true, isAvailable: true } } } } },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            role: true,
+            isActive: true,
+            driverProfile: { select: { kycStatus: true, isAvailable: true } },
+          },
+        },
+      },
     });
     if (!vehicle || !vehicle.isActive) {
       return { success: false, error: "Selected vehicle is not active or available." };
     }
 
-    if (!vehicle.owner.isActive || vehicle.owner.driverProfile?.kycStatus !== "APPROVED") {
-      return { success: false, error: "The vehicle owner must have an active account and approved KYC." };
-    }
-    if (!vehicle.owner.driverProfile?.isAvailable) {
-      return { success: false, error: "The vehicle owner is currently unavailable." };
+    if (!vehicle.owner || !vehicle.owner.isActive) {
+      return { success: false, error: "Vehicle owner account is inactive." };
     }
 
-    // Driver must own the vehicle; admin can assign any vehicle
+    if (vehicle.owner.role === "DRIVER" && vehicle.owner.driverProfile?.kycStatus !== "APPROVED") {
+      return { success: false, error: "The vehicle owner must have an active account and approved KYC." };
+    }
+
     if (role === "DRIVER" && vehicle.ownerId !== currentUser.id) {
       return { success: false, error: "You can only schedule trips using your own vehicles." };
     }
 
-    // Resolve source & destination names for route pricing
     const [source, destination] = await Promise.all([
       db.location.findUnique({ where: { id: sourceId } }),
       db.location.findUnique({ where: { id: destinationId } }),
@@ -158,51 +161,83 @@ export async function createTrip(
       return { success: false, error: "Source or destination location not found." };
     }
 
-    // Calculate today's trip sequence for this route
-    const today = new Date(startTime.getFullYear(), startTime.getMonth(), startTime.getDate());
-    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    const assignedDriverId = (parsed.data.driverId && parsed.data.driverId.length > 0)
+      ? parsed.data.driverId
+      : (vehicle.owner.role === "DRIVER" ? vehicle.ownerId : currentUser.id);
 
-    const todayCount = await db.trip.count({
-      where: {
-        sourceId,
-        destinationId,
-        startTime: { gte: today, lt: tomorrow },
-      },
-    });
-
-    const seatTemplates = await getVehicleSeatTemplates(vehicleId);
-    if (seatTemplates.length !== vehicle.capacity) {
-      return { success: false, error: `Vehicle capacity is ${vehicle.capacity}, but ${seatTemplates.length} active seat templates are configured. Ask an admin to fix pricing templates.` };
-    }
-
-    const trip = await db.trip.create({
-      data: {
-        driverId: vehicle.ownerId,
-        vehicleId,
-        sourceId,
-        destinationId,
-        startTime,
-        tripSequence: todayCount + 1,
-        seats: {
-          create: seatTemplates.map((seat) => ({
-            seatNumber: seat.seatNumber,
-            seatType: seat.seatType,
-            basePrice: seat.basePrice,
-            price: seat.basePrice,
-          })),
-        },
-      },
-      include: { seats: true, source: true, destination: true },
-    });
+    const { createTrip: createTripService } = await import("@/lib/trip-service");
+    const trip = await createTripService(
+      assignedDriverId,
+      vehicleId,
+      sourceId,
+      destinationId,
+      startTime,
+      role as "ADMIN" | "DRIVER",
+      currentUser.id
+    );
 
     revalidatePath("/driver/trips");
     revalidatePath("/admin/trips");
+    revalidatePath("/admin/trips/approvals");
 
-    return { success: true, data: { tripId: trip.id } };
+    return {
+      success: true,
+      data: {
+        tripId: trip.id,
+        isPendingApproval: trip.status === "PENDING_APPROVAL",
+      },
+    };
   } catch (e: unknown) {
     const message =
       e instanceof Error ? e.message : "An unexpected error occurred while creating the trip.";
     return { success: false, error: message };
+  }
+}
+
+export async function approveDriverTripAction(
+  tripId: string,
+  overrideDriverId?: string,
+  overrideVehicleId?: string
+): Promise<ActionResult<{ tripId: string; status: string }>> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized — Admin access required." };
+  }
+
+  try {
+    const { approveTripRequest } = await import("@/lib/trip-service");
+    const updated = await approveTripRequest(tripId, currentUser.id, overrideDriverId, overrideVehicleId);
+
+    revalidatePath("/admin/trips");
+    revalidatePath("/admin/trips/approvals");
+    revalidatePath("/driver/trips");
+
+    return { success: true, data: { tripId: updated.id, status: updated.status } };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to approve trip request." };
+  }
+}
+
+export async function rejectDriverTripAction(
+  tripId: string,
+  reason: string
+): Promise<ActionResult<{ tripId: string; status: string }>> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized — Admin access required." };
+  }
+
+  try {
+    const { rejectTripRequest } = await import("@/lib/trip-service");
+    const updated = await rejectTripRequest(tripId, currentUser.id, reason);
+
+    revalidatePath("/admin/trips");
+    revalidatePath("/admin/trips/approvals");
+    revalidatePath("/driver/trips");
+
+    return { success: true, data: { tripId: updated.id, status: updated.status } };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to decline trip request." };
   }
 }
 

@@ -99,3 +99,71 @@ export async function toggleUserActiveStatus(userId: string, isActive: boolean) 
     return { success: false, error: "Unable to update that user status." };
   }
 }
+
+export async function updateDriverDetailsAction(input: {
+  driverId: string;
+  name?: string;
+  phone?: string;
+  fullName?: string;
+  aadhaarNumber?: string;
+  licenseNumber?: string;
+  kycStatus?: "PENDING" | "APPROVED" | "REJECTED";
+  walletBalance?: number;
+}) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized. Admin privileges required." };
+  }
+
+  const { driverId, name, phone, fullName, aadhaarNumber, licenseNumber, kycStatus, walletBalance } = input;
+  if (!driverId) return { success: false, error: "Driver ID is required." };
+
+  try {
+    await db.$transaction(async (tx) => {
+      if (name !== undefined || phone !== undefined) {
+        await tx.user.update({
+          where: { id: driverId },
+          data: {
+            ...(name !== undefined ? { name } : {}),
+            ...(phone !== undefined ? { phone } : {}),
+          },
+        });
+      }
+
+      await tx.driverProfile.upsert({
+        where: { userId: driverId },
+        create: {
+          userId: driverId,
+          fullName: fullName || name || "Driver Partner",
+          aadhaarNumber: aadhaarNumber || null,
+          licenseNumber: licenseNumber || null,
+          kycStatus: kycStatus || "APPROVED",
+          walletBalance: walletBalance !== undefined ? walletBalance : 0,
+        },
+        update: {
+          ...(fullName !== undefined ? { fullName } : {}),
+          ...(aadhaarNumber !== undefined ? { aadhaarNumber } : {}),
+          ...(licenseNumber !== undefined ? { licenseNumber } : {}),
+          ...(kycStatus !== undefined ? { kycStatus } : {}),
+          ...(walletBalance !== undefined ? { walletBalance } : {}),
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId: session.user.id!,
+          action: "UPDATE_DRIVER_PROFILE",
+          targetType: "driver",
+          targetId: driverId,
+          metadata: { name, phone, kycStatus, walletBalance },
+        },
+      });
+    });
+
+    revalidatePath("/admin/drivers");
+    revalidatePath(`/admin/drivers/${driverId}`);
+    return { success: true };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to update driver profile." };
+  }
+}

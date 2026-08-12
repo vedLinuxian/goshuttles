@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
     if (publicSearch) {
       where.manifestLocked = false;
       where.driverId = { not: null };
+      where.approvalStatus = "APPROVED";
       where.vehicle = { is: { isActive: true } };
       where.seats = { some: { status: "AVAILABLE" } };
     }

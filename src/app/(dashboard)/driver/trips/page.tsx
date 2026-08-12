@@ -7,13 +7,17 @@ import SearchBar from "@/components/ui/search-bar";
 import { PlusCircle, MapPin, Calendar, Users, Route } from "lucide-react";
 import { Card, Badge, Button } from "@/components/ui";
 
+import type { TripStatus } from "@/generated/prisma/client";
+
 const PAGE_SIZE = 10;
 
 const STATUS_LABELS: Record<string, string> = {
+  PENDING_APPROVAL: "Pending Approval",
   SCHEDULED: "Scheduled",
   IN_PROGRESS: "In Progress",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
+  REJECTED: "Declined",
 };
 
 type SearchParams = {
@@ -35,8 +39,10 @@ export default async function DriverTripsPage({
   const statusFilter = params.status ?? undefined;
   const q = params.q || "";
 
-  const where: Record<string, unknown> = { driverId: session.user.id };
-  if (statusFilter && ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"].includes(statusFilter)) {
+  const where: Record<string, unknown> = {
+    OR: [{ driverId: session.user.id }, { requestedById: session.user.id }],
+  };
+  if (statusFilter && ["PENDING_APPROVAL", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "REJECTED"].includes(statusFilter)) {
     where.status = statusFilter;
   }
   if (q) {
@@ -68,7 +74,9 @@ export default async function DriverTripsPage({
 
   const statusCounts = await db.trip.groupBy({
     by: ["status"],
-    where: { driverId: session.user.id },
+    where: {
+      OR: [{ driverId: session.user.id }, { requestedById: session.user.id }],
+    },
     _count: { id: true },
   });
 
@@ -111,7 +119,7 @@ export default async function DriverTripsPage({
           >
             All ({totalCount})
           </Link>
-          {["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"].map((st) => (
+          {["PENDING_APPROVAL", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "REJECTED"].map((st) => (
             <Link
               key={st}
               href={`/driver/trips?status=${st}`}
@@ -148,9 +156,8 @@ export default async function DriverTripsPage({
               totalSeats > 0 ? Math.round((bookedSeats / totalSeats) * 100) : 0;
 
             return (
-              <Link
+              <div
                 key={trip.id}
-                href={`/driver/trips/${trip.id}`}
                 className="block group"
               >
                 <Card variant="glass" className="p-5 border-slate-800 hover:border-amber-500/50 hover:shadow-2xl transition-all card-hover">
@@ -166,9 +173,11 @@ export default async function DriverTripsPage({
                               ? "success"
                               : trip.status === "IN_PROGRESS"
                               ? "info"
-                              : trip.status === "CANCELLED"
+                              : trip.status === "PENDING_APPROVAL"
+                              ? "warning"
+                              : trip.status === "CANCELLED" || trip.status === "REJECTED"
                               ? "destructive"
-                              : "warning"
+                              : "secondary"
                           }
                         >
                           {STATUS_LABELS[trip.status] ?? trip.status}
@@ -214,8 +223,43 @@ export default async function DriverTripsPage({
                       </div>
                     </div>
                   </div>
+
+                  {/* Rejection Reason Notice */}
+                  {trip.status === "REJECTED" && trip.rejectionReason && (
+                    <div className="mt-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+                      Declined by Operator: {trip.rejectionReason}
+                    </div>
+                  )}
+
+                  {/* Driver Management Action Toolbar */}
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/driver/trips/${trip.id}`}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all"
+                      >
+                        View Manifest &amp; Passengers →
+                      </Link>
+                      {trip.status === "SCHEDULED" && (
+                        <Link
+                          href={`/driver/offline-book?tripId=${trip.id}`}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs font-bold transition-all"
+                        >
+                          + Walk-up Cash Booking
+                        </Link>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {trip.status === "PENDING_APPROVAL" && (
+                        <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                          Awaiting Operator Review
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </Card>
-              </Link>
+              </div>
             );
           })}
         </div>

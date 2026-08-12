@@ -82,3 +82,25 @@ export async function updateAvailableTripSeatPrice(tripId: string, price: number
   revalidateTrip(tripId);
   return { success: true, seatsUpdated: result };
 }
+
+export async function approveDriverTripRequest(tripId: string, overrideDriverId?: string, overrideVehicleId?: string) {
+  const adminId = await requireAdmin();
+  const { approveTripRequest } = await import("@/lib/trip-service");
+  const updated = await approveTripRequest(tripId, adminId, overrideDriverId, overrideVehicleId);
+  revalidateTrip(tripId);
+  revalidatePath("/admin/trips/approvals");
+  revalidatePath("/driver/trips");
+  return { success: true, status: updated.status };
+}
+
+export async function rejectDriverTripRequest(tripId: string, reason: string) {
+  const adminId = await requireAdmin();
+  const parsed = z.object({ tripId: tripIdSchema, reason: reasonSchema }).safeParse({ tripId, reason });
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "A reason is required.");
+  const { rejectTripRequest } = await import("@/lib/trip-service");
+  const updated = await rejectTripRequest(tripId, adminId, parsed.data.reason);
+  revalidateTrip(tripId);
+  revalidatePath("/admin/trips/approvals");
+  revalidatePath("/driver/trips");
+  return { success: true, status: updated.status };
+}

@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { getPricingConfig } from "./pricing-service";
 import { issueTicket } from "./ticket-service";
+import { dispatchSystemEvent } from "./notification-service";
 import crypto from "node:crypto";
 
 // ============================================================
@@ -728,6 +729,17 @@ export async function cancelBooking(
                 totalEarnings: { decrement: reversalAmount },
                 walletBalance: { decrement: reversalAmount },
               },
+        });
+      }
+
+      if (booking.paymentMode === "ONLINE") {
+        await tx.refundRecord.create({
+          data: {
+            bookingId: bookingId,
+            refundAmount: booking.totalAmount,
+            reason: `Passenger refund for cancelled booking: ${reason || "Cancelled by passenger"}`,
+            status: "COMPLETED",
+          },
         });
       }
     }

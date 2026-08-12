@@ -45,3 +45,5 @@ export { Alert, AlertTitle, AlertDescription } from "./alert";
 export { EmptyState } from "./empty-state";
 export { ErrorBoundary } from "./error-boundary";
 export { SortableHeader } from "./sortable-header";
+export { SearchableSelect, type SearchableOption, type SearchableSelectProps } from "./searchable-select";
+export { DateTimePicker, type DateTimePickerProps } from "./date-time-picker";

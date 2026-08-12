@@ -244,3 +244,87 @@ export async function toggleVehicleActive(
   }
 }
 
+export async function assignVehicleToDriverAction(
+  vehicleId: string,
+  driverId: string
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized — Admin role required." };
+  }
+  if (!vehicleId || !driverId) {
+    return { success: false, error: "Vehicle ID and Driver ID are required." };
+  }
+  try {
+    const adminUser = await db.user.findFirst({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    const fallbackOwnerId = adminUser?.id || session.user.id;
+
+    await db.$transaction(async (tx) => {
+      // 1. Unassign any other vehicle currently assigned to this driver
+      const existingVehicle = await tx.vehicle.findFirst({
+        where: { ownerId: driverId, id: { not: vehicleId } },
+      });
+      if (existingVehicle) {
+        await tx.vehicle.update({
+          where: { id: existingVehicle.id },
+          data: { ownerId: fallbackOwnerId },
+        });
+      }
+
+      // 2. Assign target vehicle to driver
+      await tx.vehicle.update({
+        where: { id: vehicleId },
+        data: { ownerId: driverId },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId: session.user.id!,
+          action: "ASSIGN_VEHICLE",
+          targetType: "vehicle",
+          targetId: vehicleId,
+          metadata: { driverId, previousVehicleId: existingVehicle?.id ?? null },
+        },
+      });
+    });
+
+    revalidatePath("/admin/vehicles");
+    revalidatePath("/admin/assign");
+    revalidatePath("/admin/drivers");
+    revalidatePath("/admin/trips");
+    return { success: true };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to assign vehicle" };
+  }
+}
+
+export async function unassignVehicleAction(vehicleId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized — Admin role required." };
+  }
+  try {
+    const adminUser = await db.user.findFirst({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    const fallbackOwnerId = adminUser?.id || session.user.id;
+
+    await db.vehicle.update({
+      where: { id: vehicleId },
+      data: { ownerId: fallbackOwnerId },
+    });
+
+    revalidatePath("/admin/vehicles");
+    revalidatePath("/admin/assign");
+    revalidatePath("/admin/drivers");
+    revalidatePath("/admin/trips");
+    return { success: true };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to unassign vehicle" };
+  }
+}
+
