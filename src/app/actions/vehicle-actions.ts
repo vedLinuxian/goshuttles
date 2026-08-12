@@ -173,46 +173,6 @@ export async function updateVehicle(
   }
 }
 
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message || "Invalid vehicle update input" };
-  }
-
-  const data: Record<string, unknown> = {};
-  if (parsed.data.regNumber) data.regNumber = parsed.data.regNumber;
-  if (parsed.data.modelName) data.modelName = parsed.data.modelName;
-  if (parsed.data.vehicleType) data.vehicleType = parsed.data.vehicleType;
-  if (parsed.data.capacity) data.capacity = parsed.data.capacity;
-  if (parsed.data.isActive !== undefined) data.isActive = parsed.data.isActive;
-
-  try {
-    const updated = await db.$transaction(async (tx) => {
-      const vehicle = await tx.vehicle.findUnique({ where: { id: vehicleId } });
-      if (!vehicle) {
-        throw new Error("Vehicle not found.");
-      }
-
-      const isOwner = vehicle.ownerId === session.user.id;
-      const isAdmin = session.user.role === "ADMIN";
-      if (!isOwner && !isAdmin) {
-        throw new Error("You can only edit your own vehicles.");
-      }
-
-      return tx.vehicle.update({
-        where: { id: vehicleId },
-        data,
-      });
-    });
-
-    revalidatePath("/driver/profile");
-    revalidatePath("/admin/vehicles");
-    return { success: true, data: updated };
-  } catch (e: unknown) {
-    const message =
-      e instanceof Error ? e.message : "Failed to update vehicle.";
-    return { success: false, error: message };
-  }
-}
-
 // ============================================================
 // REMOVE VEHICLE (soft-delete)
 // ============================================================
