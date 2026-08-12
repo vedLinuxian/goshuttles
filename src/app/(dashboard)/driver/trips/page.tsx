@@ -1,29 +1,16 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import Link from "next/link";
-import PaginationControls from "@/components/ui/pagination";
-import SearchBar from "@/components/ui/search-bar";
-import { PlusCircle, MapPin, Calendar, Users, Route } from "lucide-react";
-import { Card, Badge, Button } from "@/components/ui";
+import { autoArchiveExpiredTrips } from "@/lib/trip-service";
+import { DriverTripsClient } from "./driver-trips-client";
 
-import type { TripStatus } from "@/generated/prisma/client";
-
-const PAGE_SIZE = 10;
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING_APPROVAL: "Pending Approval",
-  SCHEDULED: "Scheduled",
-  IN_PROGRESS: "In Progress",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-  REJECTED: "Declined",
-};
+export const dynamic = "force-dynamic";
 
 type SearchParams = {
   page?: string;
   status?: string;
   q?: string;
+  pageSize?: string;
 };
 
 export default async function DriverTripsPage({
@@ -34,26 +21,39 @@ export default async function DriverTripsPage({
   const session = await auth();
   if (!session?.user?.id || session.user.role !== "DRIVER") redirect("/login");
 
+  const driverId = session.user.id;
+
+  // Auto-archive any past unstarted trips for this driver
+  await autoArchiveExpiredTrips(driverId);
+
   const params = await searchParams;
   const currentPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
-  const statusFilter = params.status ?? undefined;
-  const q = params.q || "";
+  const pageSize = Math.min(100, Math.max(10, parseInt(params.pageSize ?? "10", 10) || 10));
+  const statusFilter = params.status ?? "";
+  const q = (params.q ?? "").trim();
 
-  const where: Record<string, unknown> = {
-    OR: [{ driverId: session.user.id }, { requestedById: session.user.id }],
+  const where: any = {
+    OR: [{ driverId }, { requestedById: driverId }],
   };
+
   if (statusFilter && ["PENDING_APPROVAL", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "REJECTED"].includes(statusFilter)) {
     where.status = statusFilter;
   }
+
   if (q) {
-    where.OR = [
-      { source: { name: { contains: q, mode: "insensitive" } } },
-      { destination: { name: { contains: q, mode: "insensitive" } } },
-      { vehicle: { regNumber: { contains: q, mode: "insensitive" } } },
+    where.AND = [
+      {
+        OR: [
+          { source: { name: { contains: q, mode: "insensitive" } } },
+          { destination: { name: { contains: q, mode: "insensitive" } } },
+          { vehicle: { regNumber: { contains: q, mode: "insensitive" } } },
+          { vehicle: { modelName: { contains: q, mode: "insensitive" } } },
+        ],
+      },
     ];
   }
 
-  const [trips, totalCount] = await Promise.all([
+  const [trips, totalCount, statusCounts] = await Promise.all([
     db.trip.findMany({
       where,
       include: {
@@ -63,215 +63,53 @@ export default async function DriverTripsPage({
         seats: { select: { id: true, status: true } },
         _count: { select: { bookings: true } },
       },
-      orderBy: { startTime: "asc" },
-      skip: (currentPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      orderBy: { startTime: "desc" },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
     }),
     db.trip.count({ where }),
+    db.trip.groupBy({
+      by: ["status"],
+      where: {
+        OR: [{ driverId }, { requestedById: driverId }],
+      },
+      _count: { id: true },
+    }),
   ]);
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
-  const statusCounts = await db.trip.groupBy({
-    by: ["status"],
-    where: {
-      OR: [{ driverId: session.user.id }, { requestedById: session.user.id }],
-    },
-    _count: { id: true },
-  });
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const countsByStatus: Record<string, number> = {};
   for (const sc of statusCounts) {
     countsByStatus[sc.status] = sc._count.id;
   }
 
+  const serializedTrips = trips.map((t) => ({
+    id: t.id,
+    tripSequence: t.tripSequence,
+    status: t.status,
+    startTime: t.startTime.toISOString(),
+    isCancelled: t.isCancelled,
+    cancellationReason: t.cancellationReason,
+    rejectionReason: t.rejectionReason,
+    source: { id: t.source.id, name: t.source.name },
+    destination: { id: t.destination.id, name: t.destination.name },
+    vehicle: { id: t.vehicle.id, regNumber: t.vehicle.regNumber, modelName: t.vehicle.modelName },
+    bookedSeats: t.seats.filter((s) => s.status === "BOOKED").length,
+    totalSeats: t.seats.length,
+    bookingCount: t._count.bookings,
+  }));
+
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <Route className="h-6 w-6 text-amber-400" />
-            My Shuttle Trips
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {totalCount} total trip{totalCount !== 1 ? "s" : ""} in your driver manifest
-          </p>
-        </div>
-        <Link href="/driver/trips/new">
-          <Button className="bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-extrabold gap-2 shadow-md glow-amber cursor-pointer">
-            <PlusCircle className="h-4 w-4" />
-            Schedule New Trip
-          </Button>
-        </Link>
-      </div>
-
-      {/* Status filter tabs */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-2 flex-wrap bg-slate-900/90 border border-slate-800 rounded-2xl p-1.5 w-fit">
-          <Link
-            href="/driver/trips"
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              !statusFilter
-                ? "bg-amber-500 text-slate-950 shadow-md glow-amber"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            All ({totalCount})
-          </Link>
-          {["PENDING_APPROVAL", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "REJECTED"].map((st) => (
-            <Link
-              key={st}
-              href={`/driver/trips?status=${st}`}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                statusFilter === st
-                  ? "bg-amber-500 text-slate-950 shadow-md glow-amber"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              {STATUS_LABELS[st] ?? st} ({countsByStatus[st] ?? 0})
-            </Link>
-          ))}
-        </div>
-        <SearchBar placeholder="Search by route or vehicle..." className="sm:max-w-xs" />
-      </div>
-
-      {/* Trip list */}
-      {trips.length === 0 ? (
-        <Card variant="glass" className="text-center py-16 p-8 space-y-3 border-slate-800">
-          <MapPin className="h-10 w-10 mx-auto text-amber-500/40" />
-          <p className="text-white font-extrabold text-lg">No trips found</p>
-          <p className="text-xs text-slate-400">
-            {statusFilter
-              ? `You have no ${STATUS_LABELS[statusFilter]?.toLowerCase() ?? statusFilter} trips.`
-              : "Schedule your first trip to start taking bookings."}
-          </p>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {trips.map((trip) => {
-            const bookedSeats = trip.seats.filter((s) => s.status === "BOOKED").length;
-            const totalSeats = trip.seats.length;
-            const occupancyPct =
-              totalSeats > 0 ? Math.round((bookedSeats / totalSeats) * 100) : 0;
-
-            return (
-              <div
-                key={trip.id}
-                className="block group"
-              >
-                <Card variant="glass" className="p-5 border-slate-800 hover:border-amber-500/50 hover:shadow-2xl transition-all card-hover">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          #{trip.tripSequence}
-                        </span>
-                        <Badge
-                          variant={
-                            trip.status === "COMPLETED"
-                              ? "success"
-                              : trip.status === "IN_PROGRESS"
-                              ? "info"
-                              : trip.status === "PENDING_APPROVAL"
-                              ? "warning"
-                              : trip.status === "CANCELLED" || trip.status === "REJECTED"
-                              ? "destructive"
-                              : "secondary"
-                          }
-                        >
-                          {STATUS_LABELS[trip.status] ?? trip.status}
-                        </Badge>
-                      </div>
-
-                      <h3 className="text-base font-extrabold text-white group-hover:text-amber-400 transition-colors flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-amber-400 shrink-0" />
-                        {trip.source.name} → {trip.destination.name}
-                      </h3>
-
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 text-amber-400" />
-                          {new Date(trip.startTime).toLocaleString("en-IN", {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <Users className="h-3.5 w-3.5 text-amber-400" />
-                          {bookedSeats}/{totalSeats} seats
-                        </span>
-                        <span className="text-slate-400 font-mono">
-                          {trip.vehicle.regNumber} · {trip.vehicle.modelName}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="hidden sm:flex flex-col items-end gap-1.5 min-w-[120px]">
-                      <span className="text-xs font-bold text-amber-400">{occupancyPct}% occupancy</span>
-                      <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            occupancyPct >= 80
-                              ? "bg-emerald-400"
-                              : occupancyPct >= 40
-                              ? "bg-amber-400"
-                              : "bg-rose-400"
-                          }`}
-                          style={{ width: `${occupancyPct}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Rejection Reason Notice */}
-                  {trip.status === "REJECTED" && trip.rejectionReason && (
-                    <div className="mt-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
-                      Declined by Operator: {trip.rejectionReason}
-                    </div>
-                  )}
-
-                  {/* Driver Management Action Toolbar */}
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/driver/trips/${trip.id}`}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all"
-                      >
-                        View Manifest &amp; Passengers →
-                      </Link>
-                      {trip.status === "SCHEDULED" && (
-                        <Link
-                          href={`/driver/offline-book?tripId=${trip.id}`}
-                          className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs font-bold transition-all"
-                        >
-                          + Walk-up Cash Booking
-                        </Link>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {trip.status === "PENDING_APPROVAL" && (
-                        <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                          Awaiting Operator Review
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Pagination */}
-      <PaginationControls
-        page={currentPage}
-        totalPages={totalPages}
-        total={totalCount}
-        pageSize={PAGE_SIZE}
-      />
-    </div>
+    <DriverTripsClient
+      trips={serializedTrips}
+      page={currentPage}
+      pageSize={pageSize}
+      totalPages={totalPages}
+      totalCount={totalCount}
+      statusFilter={statusFilter}
+      q={q}
+      countsByStatus={countsByStatus}
+    />
   );
 }

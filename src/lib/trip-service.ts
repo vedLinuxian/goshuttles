@@ -11,7 +11,43 @@ const SEATS_CONFIG = [
   { number: "B2", type: "BACK" as const, price: 250 },
 ];
 
+export async function autoArchiveExpiredTrips(driverId?: string) {
+  try {
+    const now = new Date();
+    const whereClause: Prisma.TripWhereInput = {
+      status: { in: ["SCHEDULED", "PENDING_APPROVAL"] },
+      startTime: { lt: now },
+      isCancelled: false,
+    };
+    if (driverId) whereClause.driverId = driverId;
+
+    const expiredTrips = await db.trip.findMany({
+      where: whereClause,
+      select: { id: true },
+    });
+
+    if (expiredTrips.length === 0) return 0;
+
+    const expiredIds = expiredTrips.map((t) => t.id);
+
+    await db.trip.updateMany({
+      where: { id: { in: expiredIds } },
+      data: {
+        status: "CANCELLED",
+        isCancelled: true,
+        cancellationReason: "Expired — Departure time passed without driver departure",
+      },
+    });
+
+    return expiredIds.length;
+  } catch (err) {
+    console.error("Failed to auto-archive expired trips:", err);
+    return 0;
+  }
+}
+
 export async function checkScheduleConflicts(
+
   dbOrTx: typeof db | Prisma.TransactionClient,
   driverId: string | null | undefined,
   vehicleId: string,
