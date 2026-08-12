@@ -56,9 +56,20 @@ export default async function AdminUsersPage({
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
+  const serializedUsers = users.map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    phone: u.phone,
+    role: u.role,
+    isActive: u.isActive,
+    createdAt: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString(),
+    _count: u._count,
+  }));
+
   return (
     <UsersClient
-      users={users}
+      users={serializedUsers}
       page={page}
       totalPages={totalPages}
       totalCount={totalCount}
@@ -69,3 +80,4 @@ export default async function AdminUsersPage({
     />
   );
 }
+

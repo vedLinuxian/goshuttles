@@ -241,3 +241,49 @@ export async function registerDriverAction(input: {
     return { success: false, error: e instanceof Error ? e.message : "Failed to register driver partner." };
   }
 }
+
+export async function adminResetUserPasswordAction(userId: string, newPassword?: string) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized. Admin privileges required." };
+  }
+
+  if (!userId) {
+    return { success: false, error: "User ID is required." };
+  }
+
+  const pass = newPassword?.trim() || "shuttle123";
+  if (pass.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters." };
+  }
+
+  try {
+    const hashedPassword = await hash(pass, 10);
+
+    await db.$transaction(async (tx) => {
+      const targetUser = await tx.user.findUnique({ where: { id: userId }, select: { id: true, name: true, phone: true } });
+      if (!targetUser) throw new Error("User not found.");
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: hashedPassword },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId: session.user.id!,
+          action: "RESET_USER_PASSWORD",
+          targetType: "user",
+          targetId: userId,
+          metadata: { userName: targetUser.name, userPhone: targetUser.phone },
+        },
+      });
+    });
+
+    revalidatePath("/admin/users");
+    return { success: true, newPassword: pass };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to reset password." };
+  }
+}
+
