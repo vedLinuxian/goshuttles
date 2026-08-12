@@ -46,9 +46,11 @@ export const navigationByRole: Record<Role, NavSection[]> = {
   DRIVER: [
     { title: "Operations", items: [
       { label: "Live Dashboard", href: "/driver/dashboard", icon: LayoutDashboard },
+      { label: "Passenger Bookings", href: "/driver/bookings", icon: Ticket, children: ["/driver/bookings/"] },
       { label: "Cash Collection", href: "/driver/bookings/pending", icon: Wallet },
       { label: "My Trips", href: "/driver/trips", icon: History, children: ["/driver/trips/"] },
     ] },
+
 
     { title: "Quick Actions", items: [
       { label: "Schedule Trip", href: "/driver/trips/new", icon: PlusCircle },

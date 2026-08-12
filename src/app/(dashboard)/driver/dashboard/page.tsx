@@ -114,30 +114,39 @@ export default async function DriverDashboardPage() {
             </div>
           </div>
           <p className="text-2xl font-black text-white mt-2">{totalTrips}</p>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">Completed shuttle runs</p>
         </div>
 
         <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Earnings</p>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Net Share</p>
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
               <Wallet className="h-4 w-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white mt-2">
-            ₹{Number(driverProfile?.totalEarnings ?? 0).toLocaleString("en-IN")}
+          <p className="text-2xl font-black text-amber-400 mt-2">
+            ₹{Number(driverProfile?.totalEarnings ?? 0).toFixed(2)}
           </p>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">Your 95% share after platform fee</p>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg">
+        <div className={`bg-slate-900/60 border rounded-2xl p-5 shadow-lg ${Number(driverProfile?.walletBalance ?? 0) < 0 ? "border-rose-500/30 bg-rose-500/5" : "border-slate-800/80"}`}>
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Wallet Balance</p>
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+            <div className={`p-2 rounded-xl ${Number(driverProfile?.walletBalance ?? 0) < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"}`}>
               <CreditCard className="h-4 w-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white mt-2">
-            ₹{Number(driverProfile?.walletBalance ?? 0).toLocaleString("en-IN")}
+          <p className={`text-2xl font-black mt-2 ${Number(driverProfile?.walletBalance ?? 0) < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+            {Number(driverProfile?.walletBalance ?? 0) < 0 ? "-" : "+"}₹{Math.abs(Number(driverProfile?.walletBalance ?? 0)).toFixed(2)}
           </p>
+          {Number(driverProfile?.walletBalance ?? 0) < 0 ? (
+            <p className="text-[10px] text-rose-400 mt-1 font-bold">
+              ⚠ ₹{Math.abs(Number(driverProfile?.walletBalance ?? 0)).toFixed(2)} Commission Due (Cash collected)
+            </p>
+          ) : (
+            <p className="text-[10px] text-emerald-400 mt-1 font-medium">Net available payout balance</p>
+          )}
         </div>
 
         <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg">
@@ -150,8 +159,10 @@ export default async function DriverDashboardPage() {
           <p className="text-2xl font-black text-white mt-2">
             {Number(driverProfile?.rating ?? 5).toFixed(1)} <span className="text-sm font-normal text-yellow-400">★</span>
           </p>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">Passenger satisfaction score</p>
         </div>
       </div>
+
 
       {!activeTrip ? (
         /* No Active Trip Card */
