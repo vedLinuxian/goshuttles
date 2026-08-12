@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Route, Users, Car, BarChart3, Wallet, MapPin, FileText,
   Bell, Ticket, Star, MessageSquare, LogOut, X, User, ClipboardCheck,
   History, PlusCircle, TrendingUp, Search, Menu, Link2, ShieldCheck,
-  ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen,
+  ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Settings,
 } from "lucide-react";
 import { handleSignOut } from "@/app/actions/auth-actions";
 
@@ -38,6 +38,7 @@ export const navigationByRole: Record<Role, NavSection[]> = {
       { label: "Drivers", href: "/admin/drivers", icon: Users },
       { label: "Assign Vehicle", href: "/admin/assign", icon: Link2 },
       { label: "Finance", href: "/admin/finance", icon: Wallet },
+      { label: "Settings", href: "/admin/settings", icon: Settings },
     ] },
   ],
   DRIVER: [

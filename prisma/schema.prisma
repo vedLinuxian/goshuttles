@@ -151,13 +151,17 @@ model Location {
 }
 
 model Vehicle {
-  id          String  @id @default(uuid())
-  ownerId     String  @map("owner_id")
-  regNumber   String  @map("reg_number")
-  modelName   String  @default("Maruti Ertiga") @map("model_name")
-  vehicleType String  @default("SUV") @map("vehicle_type")
-  capacity    Int     @default(6)
-  isActive    Boolean @default(true) @map("is_active")
+  id                  String    @id @default(uuid())
+  ownerId             String    @map("owner_id")
+  regNumber           String    @map("reg_number")
+  modelName           String    @default("Maruti Ertiga") @map("model_name")
+  vehicleType         String    @default("SUV") @map("vehicle_type")
+  capacity            Int       @default(6)
+  fuelType            String    @default("CNG") @map("fuel_type")
+  regDate             DateTime? @map("reg_date")
+  insuranceNumber     String?   @map("insurance_number")
+  insuranceExpiryDate DateTime? @map("insurance_expiry_date")
+  isActive            Boolean   @default(true) @map("is_active")
 
   owner         User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   trips         Trip[]

@@ -167,3 +167,76 @@ export async function updateDriverDetailsAction(input: {
     return { success: false, error: e instanceof Error ? e.message : "Failed to update driver profile." };
   }
 }
+
+export async function registerDriverAction(input: {
+  name: string;
+  phone: string;
+  password?: string;
+  fullName?: string;
+  aadhaarNumber?: string;
+  licenseNumber?: string;
+  kycStatus?: "PENDING" | "APPROVED";
+}) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized. Admin privileges required." };
+  }
+
+  const { name, phone, password, fullName, aadhaarNumber, licenseNumber, kycStatus } = input;
+  if (!name || !phone) {
+    return { success: false, error: "Driver name and phone number are required." };
+  }
+
+  try {
+    const existing = await db.user.findFirst({
+      where: { OR: [{ phone }, { email: `${phone}@goshuttles.app` }] },
+    });
+    if (existing) {
+      return { success: false, error: "A user account with this phone number already exists." };
+    }
+
+    const pass = password || "driver123";
+    const hashedPassword = await hash(pass, 10);
+
+    const driver = await db.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          name,
+          phone,
+          email: `${phone}@goshuttles.app`,
+          role: "DRIVER",
+          isActive: true,
+          passwordHash: hashedPassword,
+        },
+      });
+
+      await tx.driverProfile.create({
+        data: {
+          userId: newUser.id,
+          fullName: fullName || name,
+          aadhaarNumber: aadhaarNumber || null,
+          licenseNumber: licenseNumber || null,
+          kycStatus: kycStatus || "APPROVED",
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId: session.user.id!,
+          action: "CREATE_DRIVER",
+          targetType: "driver",
+          targetId: newUser.id,
+          metadata: { name, phone, kycStatus },
+        },
+      });
+
+      return newUser;
+    });
+
+    revalidatePath("/admin/drivers");
+    revalidatePath("/admin/assign");
+    return { success: true, data: driver };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to register driver partner." };
+  }
+}

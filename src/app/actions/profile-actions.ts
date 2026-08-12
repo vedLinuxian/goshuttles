@@ -361,3 +361,95 @@ export async function toggleDriverAvailability(
     return { success: false, error: message };
   }
 }
+
+import { compare, hash } from "bcryptjs";
+import { getPasswordContext } from "@/lib/auth";
+
+export async function updateUserProfileAndSecurityAction(input: {
+  name?: string;
+  phone?: string;
+  email?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false, error: "Unauthorized — please sign in." };
+  }
+  const userId = session.user.id;
+  const { name, phone, email, currentPassword, newPassword } = input;
+
+  try {
+    const user = await db.user.findUnique({ where: { id: userId } });
+    if (!user) return { success: false, error: "User not found." };
+
+    if (email && email.trim() && email.toLowerCase() !== user.email?.toLowerCase()) {
+      const existingEmail = await db.user.findUnique({ where: { email: email.toLowerCase() } });
+      if (existingEmail) return { success: false, error: "An account with this email address already exists." };
+    }
+    if (phone && phone.trim() && phone !== user.phone) {
+      const existingPhone = await db.user.findUnique({ where: { phone } });
+      if (existingPhone) return { success: false, error: "An account with this phone number already exists." };
+    }
+
+    let newPasswordHash: string | undefined = undefined;
+
+    if (newPassword && newPassword.trim().length > 0) {
+      if (newPassword.trim().length < 6) {
+        return { success: false, error: "New password must be at least 6 characters long." };
+      }
+      if (!currentPassword) {
+        return { success: false, error: "Current password is required to set a new password." };
+      }
+      if (user.passwordHash) {
+        const isValid = await compare(currentPassword, user.passwordHash);
+        if (!isValid) {
+          return { success: false, error: "Current password provided is incorrect." };
+        }
+      }
+      newPasswordHash = await hash(newPassword.trim(), 10);
+    }
+
+    await db.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(phone !== undefined ? { phone } : {}),
+          ...(email !== undefined ? { email: email.trim().toLowerCase() } : {}),
+          ...(newPasswordHash ? { passwordHash: newPasswordHash } : {}),
+        },
+      });
+
+      if (newPassword && newPasswordHash) {
+        try {
+          const ctx = await getPasswordContext();
+          const betterAuthHash = await ctx.password.hash(newPassword.trim());
+          await tx.account.upsert({
+            where: { userId_providerId: { userId, providerId: "credential" } },
+            create: { userId, providerId: "credential", accountId: userId, password: betterAuthHash },
+            update: { password: betterAuthHash },
+          });
+        } catch {
+          // Fallback
+        }
+      }
+
+      await tx.activityLog.create({
+        data: {
+          userId,
+          action: "UPDATE_PROFILE_SETTINGS",
+          targetType: "user",
+          targetId: userId,
+        },
+      });
+    });
+
+    revalidatePath("/admin/settings");
+    revalidatePath("/driver/profile");
+    revalidatePath("/passenger/profile");
+    return { success: true };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to update profile settings." };
+  }
+}

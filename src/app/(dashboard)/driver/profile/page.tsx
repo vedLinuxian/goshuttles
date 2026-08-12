@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { updateDriverProfileForm, addVehicleForm, removeVehicleForm } from "@/app/actions/form-actions";
 import { Pencil, Plus, Trash2, User, Car, ShieldCheck, Star, Wallet, Route } from "lucide-react";
 import { Card, Badge, Button, Input, Select, Label } from "@/components/ui";
+import { CentralizedSettingsForm } from "@/components/profile/centralized-settings-form";
 
 export default async function DriverProfilePage() {
   const session = await auth();
@@ -94,6 +95,17 @@ export default async function DriverProfilePage() {
           </div>
         </Card>
       </div>
+
+      {/* Account Phone, Email & Password Settings */}
+      <CentralizedSettingsForm
+        user={{
+          id: session.user.id!,
+          name: session.user.name ?? null,
+          email: session.user.email ?? null,
+          phone: session.user.phone ?? null,
+          role: session.user.role,
+        }}
+      />
 
       {/* Vehicles Section */}
       <Card variant="glass" className="p-6 space-y-6 border-slate-800">

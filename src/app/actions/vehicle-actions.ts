@@ -19,7 +19,16 @@ type ActionResult<T = unknown> = {
 // ============================================================
 
 export async function createVehicle(
-  input: FormData | { regNumber: string; modelName?: string; vehicleType?: string; capacity?: number }
+  input: FormData | {
+    regNumber: string;
+    modelName?: string;
+    vehicleType?: string;
+    capacity?: number;
+    fuelType?: string;
+    regDate?: string;
+    insuranceNumber?: string;
+    insuranceExpiryDate?: string;
+  }
 ): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) {
@@ -37,6 +46,10 @@ export async function createVehicle(
       modelName: input.get("modelName") || "Maruti Ertiga",
       vehicleType: input.get("vehicleType") || "SUV",
       capacity: input.get("capacity") || 6,
+      fuelType: input.get("fuelType") || "CNG",
+      regDate: input.get("regDate") || undefined,
+      insuranceNumber: input.get("insuranceNumber") || undefined,
+      insuranceExpiryDate: input.get("insuranceExpiryDate") || undefined,
     };
   } else {
     rawData = {
@@ -44,6 +57,10 @@ export async function createVehicle(
       modelName: input.modelName || "Maruti Ertiga",
       vehicleType: input.vehicleType || "SUV",
       capacity: input.capacity || 6,
+      fuelType: input.fuelType || "CNG",
+      regDate: input.regDate,
+      insuranceNumber: input.insuranceNumber,
+      insuranceExpiryDate: input.insuranceExpiryDate,
     };
   }
 
@@ -60,6 +77,10 @@ export async function createVehicle(
         modelName: parsed.data.modelName,
         vehicleType: parsed.data.vehicleType,
         capacity: parsed.data.capacity,
+        fuelType: parsed.data.fuelType ?? "CNG",
+        regDate: parsed.data.regDate ? new Date(parsed.data.regDate) : null,
+        insuranceNumber: parsed.data.insuranceNumber || null,
+        insuranceExpiryDate: parsed.data.insuranceExpiryDate ? new Date(parsed.data.insuranceExpiryDate) : null,
       },
     });
 
@@ -104,8 +125,53 @@ export async function updateVehicle(
     modelName: formData.get("modelName") || undefined,
     vehicleType: formData.get("vehicleType") || undefined,
     capacity: formData.get("capacity") ? Number(formData.get("capacity")) : undefined,
+    fuelType: formData.get("fuelType") || undefined,
+    regDate: formData.get("regDate") || undefined,
+    insuranceNumber: formData.get("insuranceNumber") || undefined,
+    insuranceExpiryDate: formData.get("insuranceExpiryDate") || undefined,
     isActive: formData.get("isActive") ? formData.get("isActive") === "true" : undefined,
   });
+
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message || "Invalid vehicle input" };
+  }
+
+  try {
+    const updated = await db.$transaction(async (tx) => {
+      const vehicle = await tx.vehicle.findUnique({ where: { id: vehicleId } });
+      if (!vehicle) throw new Error("Vehicle not found.");
+
+      const isOwner = vehicle.ownerId === session.user.id;
+      const isAdmin = session.user.role === "ADMIN";
+      if (!isOwner && !isAdmin) {
+        throw new Error("Unauthorized — only the owner or an admin can edit vehicle details.");
+      }
+
+      return tx.vehicle.update({
+        where: { id: vehicleId },
+        data: {
+          ...(parsed.data.regNumber ? { regNumber: parsed.data.regNumber } : {}),
+          ...(parsed.data.modelName ? { modelName: parsed.data.modelName } : {}),
+          ...(parsed.data.vehicleType ? { vehicleType: parsed.data.vehicleType } : {}),
+          ...(parsed.data.capacity ? { capacity: parsed.data.capacity } : {}),
+          ...(parsed.data.fuelType ? { fuelType: parsed.data.fuelType } : {}),
+          ...(parsed.data.regDate !== undefined ? { regDate: parsed.data.regDate ? new Date(parsed.data.regDate) : null } : {}),
+          ...(parsed.data.insuranceNumber !== undefined ? { insuranceNumber: parsed.data.insuranceNumber || null } : {}),
+          ...(parsed.data.insuranceExpiryDate !== undefined ? { insuranceExpiryDate: parsed.data.insuranceExpiryDate ? new Date(parsed.data.insuranceExpiryDate) : null } : {}),
+          ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+        },
+      });
+    });
+
+    revalidatePath("/admin/vehicles");
+    revalidatePath("/driver/profile");
+    return { success: true, data: updated };
+  } catch (e: unknown) {
+    const message =
+      e instanceof Error ? e.message : "Failed to update vehicle details.";
+    return { success: false, error: message };
+  }
+}
 
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message || "Invalid vehicle update input" };

@@ -184,6 +184,10 @@ export const vehicleSchema = z.object({
   modelName: z.string().trim().min(1, "Model name required").max(100).default("Maruti Ertiga"),
   vehicleType: z.string().trim().min(1, "Vehicle type required").max(50).default("SUV"),
   capacity: vehicleCapacitySchema.default(6),
+  fuelType: z.string().trim().default("CNG"),
+  regDate: z.string().optional().or(z.literal("")),
+  insuranceNumber: z.string().optional().or(z.literal("")),
+  insuranceExpiryDate: z.string().optional().or(z.literal("")),
 });
 
 export const updateVehicleSchema = z.object({
@@ -192,6 +196,10 @@ export const updateVehicleSchema = z.object({
   modelName: z.string().trim().min(1).max(100).optional(),
   vehicleType: z.string().trim().min(1).max(50).optional(),
   capacity: vehicleCapacitySchema.optional(),
+  fuelType: z.string().trim().optional(),
+  regDate: z.string().optional().or(z.literal("")),
+  insuranceNumber: z.string().optional().or(z.literal("")),
+  insuranceExpiryDate: z.string().optional().or(z.literal("")),
   isActive: z.coerce.boolean().optional(),
 });
 

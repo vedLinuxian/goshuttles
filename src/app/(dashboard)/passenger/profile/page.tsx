@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { updatePassengerProfileForm } from "@/app/actions/form-actions";
 import { User, Phone, Calendar, Star, Shield, Pencil } from "lucide-react";
 import { Card, Badge, Button, Input, Select, Label } from "@/components/ui";
+import { CentralizedSettingsForm } from "@/components/profile/centralized-settings-form";
 
 export default async function PassengerProfilePage() {
   const session = await auth();
@@ -90,6 +91,17 @@ export default async function PassengerProfilePage() {
           </div>
         </div>
       </Card>
+
+      {/* Account Phone, Email & Password Settings */}
+      <CentralizedSettingsForm
+        user={{
+          id: session.user.id!,
+          name: session.user.name ?? null,
+          email: session.user.email ?? null,
+          phone: session.user.phone ?? null,
+          role: session.user.role,
+        }}
+      />
 
       {/* Edit Profile Form */}
       <Card variant="glass" className="p-6 space-y-4 border-slate-800 shadow-2xl">

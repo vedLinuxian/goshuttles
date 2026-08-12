@@ -17,6 +17,7 @@ import SearchBar from "@/components/ui/search-bar";
 import PaginationControls from "@/components/ui/pagination";
 import { approveKycForm, rejectKycForm } from "@/app/actions/form-actions";
 import { EditDriverModal } from "./edit-driver-modal";
+import { AddDriverModal } from "./add-driver-modal";
 import Link from "next/link";
 
 interface DriverItem {
@@ -55,6 +56,7 @@ export function DriversClient({
   pageSize,
 }: DriversClientProps) {
   const [editingDriver, setEditingDriver] = useState<DriverItem | null>(null);
+  const [isAddDriverOpen, setIsAddDriverOpen] = useState(false);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
@@ -64,6 +66,14 @@ export function DriversClient({
           driver={editingDriver}
           isOpen={!!editingDriver}
           onClose={() => setEditingDriver(null)}
+        />
+      )}
+
+      {/* Add Driver Modal */}
+      {isAddDriverOpen && (
+        <AddDriverModal
+          isOpen={isAddDriverOpen}
+          onClose={() => setIsAddDriverOpen(false)}
         />
       )}
 
@@ -78,6 +88,14 @@ export function DriversClient({
             Review driver registrations, KYC compliance verification, performance ratings, and fleet assignments.
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setIsAddDriverOpen(true)}
+          className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg glow-amber transition-all flex items-center gap-2 cursor-pointer shrink-0"
+        >
+          + Register New Driver
+        </button>
       </div>
 
       {/* Search Bar */}
