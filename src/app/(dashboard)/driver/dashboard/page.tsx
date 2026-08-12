@@ -5,6 +5,8 @@ import type { Prisma } from "@/generated/prisma/client";
 import { confirmPassengerPaymentAction, handleStartTripAction, handleCompleteTripAction } from "./actions";
 import Link from "next/link";
 import { Play, CheckSquare, Plus, Ticket, Route, Wallet, CreditCard, Star, ShieldCheck, Clock, Users } from "lucide-react";
+import { BoardingDeskComponent } from "@/components/trips/BoardingDeskComponent";
+
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +26,12 @@ export default async function DriverDashboardPage() {
     vehicle: true,
     seats: { orderBy: { seatNumber: "asc" } },
     bookings: {
-      where: { status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] } },
-      include: { user: { select: { name: true, phone: true } }, seat: true },
+      where: { status: { in: ["PENDING", "CONFIRMED", "COMPLETED", "NO_SHOW"] } },
+      include: { user: { select: { name: true, phone: true } }, seat: true, ticket: true },
       orderBy: { createdAt: "asc" },
     },
   } satisfies Prisma.TripInclude;
+
 
   const [inProgressTrip, nextScheduledTrip, driverProfile, totalTrips] = await Promise.all([
     db.trip.findFirst({
@@ -50,6 +53,21 @@ export default async function DriverDashboardPage() {
   const bookedSeats = activeTrip?.seats.filter((s) => s.status === "BOOKED").length ?? 0;
   const totalSeats = activeTrip?.seats.length ?? 0;
   const pendingPayments = activeTrip?.bookings.filter((b) => b.paymentStatus === "PENDING") ?? [];
+
+  const boardingManifest = activeTrip?.bookings.map((b) => ({
+    ticketId: b.ticket?.id ?? null,
+    ticketNumber: b.ticket?.ticketNumber ?? null,
+    bookingId: b.id,
+    passengerName: b.guestName || b.user?.name || "Passenger",
+    passengerPhone: b.user?.phone || null,
+    seatNumber: b.seat?.seatNumber ?? "N/A",
+    paymentMode: b.paymentMode,
+    paymentStatus: b.paymentStatus,
+    bookingStatus: b.status,
+    ticketStatus: b.ticket?.status ?? null,
+    usedAt: b.ticket?.usedAt ? new Date(b.ticket.usedAt).toISOString() : null,
+  })) ?? [];
+
 
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 pb-10">
@@ -153,8 +171,10 @@ export default async function DriverDashboardPage() {
           </Link>
         </div>
       ) : (
-        /* Active Dispatch Deck */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        /* Active Dispatch Deck & Boarding Desk */
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
           {/* Main Active Trip Deck */}
           <div className="lg:col-span-2 bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl flex flex-col">
             {/* Header */}
@@ -330,7 +350,13 @@ export default async function DriverDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Dedicated Boarding Control & Verification Desk */}
+        <BoardingDeskComponent tripId={activeTrip.id} manifest={boardingManifest} />
+      </div>
       )}
     </div>
   );
 }
+
+

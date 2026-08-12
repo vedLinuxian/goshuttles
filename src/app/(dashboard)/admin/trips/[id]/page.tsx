@@ -6,6 +6,8 @@ import { ArrowLeft, CalendarDays, Edit3, Ticket, Users, Wallet } from "lucide-re
 import { Badge, Card } from "@/components/ui";
 import { TripActionsPanel } from "./trip-actions-panel";
 import { RealtimeGpsTracker } from "@/components/tracking/RealtimeGpsTracker";
+import { BoardingDeskComponent } from "@/components/trips/BoardingDeskComponent";
+
 
 export default async function AdminTripOperationsPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -28,6 +30,21 @@ export default async function AdminTripOperationsPage({ params }: { params: Prom
   const collected = trip.bookings.filter((booking) => booking.paymentStatus === "COLLECTED").reduce((sum, booking) => sum + Number(booking.totalAmount), 0);
   const gross = trip.bookings.reduce((sum, booking) => sum + Number(booking.totalAmount), 0);
   const ticketGaps = activeBookings.filter((booking) => ["CONFIRMED", "COMPLETED"].includes(booking.status) && !booking.ticket).length;
+
+  const boardingManifest = trip.bookings.map((b) => ({
+    ticketId: b.ticket?.id ?? null,
+    ticketNumber: b.ticket?.ticketNumber ?? null,
+    bookingId: b.id,
+    passengerName: b.guestName || b.user?.name || "Guest",
+    passengerPhone: b.user?.phone || null,
+    seatNumber: b.seat?.seatNumber ?? "N/A",
+    paymentMode: b.paymentMode,
+    paymentStatus: b.paymentStatus,
+    bookingStatus: b.status,
+    ticketStatus: b.ticket?.status ?? null,
+    usedAt: b.ticket?.usedAt ? new Date(b.ticket.usedAt).toISOString() : null,
+  }));
+
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-6 pb-12">
@@ -119,40 +136,9 @@ export default async function AdminTripOperationsPage({ params }: { params: Prom
         </Card>
       </div>
 
-      <Card variant="glass" className="overflow-hidden p-0">
-        <div className="flex items-center justify-between border-b border-slate-200 p-5 dark:border-slate-800">
-          <h2 className="font-bold text-slate-900 dark:text-white">Passenger manifest</h2>
-          <div className="flex gap-2">
-            <Link href={`/admin/bookings?tripId=${trip.id}`} className="text-xs font-bold text-amber-500">Open bookings</Link>
-            <Link href={`/admin/tickets?tripId=${trip.id}`} className="text-xs font-bold text-amber-500">Open tickets</Link>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-950/50">
-                {["Passenger", "Seat", "Booking", "Payment", "Ticket"].map((heading) => (
-                  <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase text-slate-500">{heading}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {trip.bookings.map((booking) => (
-                <tr key={booking.id}>
-                  <td className="px-5 py-3 text-xs font-bold text-slate-900 dark:text-white">
-                    {booking.guestName || booking.user?.name || "Guest"}
-                    <span className="block text-[10px] font-normal text-slate-500">{booking.user?.phone || ""}</span>
-                  </td>
-                  <td className="px-5 py-3 text-xs text-amber-500">{booking.seat?.seatNumber}</td>
-                  <td className="px-5 py-3"><StatusBadge status={booking.status} /></td>
-                  <td className="px-5 py-3 text-xs text-slate-500">{booking.paymentMode} · {booking.paymentStatus}</td>
-                  <td className="px-5 py-3 text-xs text-slate-500">{booking.ticket?.ticketNumber || "Not issued"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* Interactive Boarding & Verification Control Desk */}
+      <BoardingDeskComponent tripId={trip.id} manifest={boardingManifest} />
+
     </div>
   );
 }
