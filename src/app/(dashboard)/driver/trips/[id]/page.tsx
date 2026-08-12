@@ -85,18 +85,18 @@ export default async function DriverTripDetailPage({
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
       <Link
         href="/driver/trips"
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to My Trips
       </Link>
 
       {/* Header card */}
-      <Card variant="glass" className="p-6 space-y-4 border-slate-800 shadow-2xl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-4">
+      <Card variant="glass" className="p-6 space-y-4 border-slate-200 dark:border-slate-800 shadow-xl bg-white/90 dark:bg-slate-900/60">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
+              <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
                 #{trip.tripSequence}
               </span>
               <Badge
@@ -114,23 +114,23 @@ export default async function DriverTripDetailPage({
               </Badge>
             </div>
 
-            <h1 className="text-2xl font-extrabold text-white flex items-center gap-2 mt-1">
-              <MapPin className="h-5 w-5 text-amber-400 shrink-0" />
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2 mt-1">
+              <MapPin className="h-5 w-5 text-amber-500 shrink-0" />
               {trip.source.name} → {trip.destination.name}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-300">
+            <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-600 dark:text-slate-300">
               <span className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-amber-400" />
+                <Calendar className="h-4 w-4 text-amber-500" />
                 {formatIST(trip.startTime, "datetime")}
               </span>
               <span className="flex items-center gap-1.5">
-                <Car className="h-4 w-4 text-amber-400" />
+                <Car className="h-4 w-4 text-amber-500" />
                 {trip.vehicle.regNumber} ({trip.vehicle.modelName})
               </span>
               {trip.driver && (
                 <span className="flex items-center gap-1.5">
-                  <Users className="h-4 w-4 text-amber-400" />
+                  <Users className="h-4 w-4 text-amber-500" />
                   {trip.driver.name ?? "Assigned Driver"}
                 </span>
               )}
@@ -147,7 +147,7 @@ export default async function DriverTripDetailPage({
         </div>
 
         {trip.cancellationReason && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold">
             Trip Cancellation Note: {trip.cancellationReason}
           </div>
         )}
@@ -160,7 +160,6 @@ export default async function DriverTripDetailPage({
         destName={trip.destination.name}
         initialLat={trip.currentLat ? Number(trip.currentLat) : null}
         initialLong={trip.currentLong ? Number(trip.currentLong) : null}
-
         lastLocationUpdate={trip.lastLocationUpdate ? trip.lastLocationUpdate.toISOString() : null}
         status={trip.status}
         isDriver={true}
@@ -170,21 +169,21 @@ export default async function DriverTripDetailPage({
       />
 
       {/* Seat Grid Map */}
-      <Card variant="glass" className="p-6 space-y-4 border-slate-800 shadow-2xl">
-        <h2 className="text-lg font-extrabold text-white">Shuttle Seat Manifest Grid</h2>
-        <p className="text-xs text-slate-400">
+      <Card variant="glass" className="p-6 space-y-4 border-slate-200 dark:border-slate-800 shadow-xl bg-white/90 dark:bg-slate-900/60">
+        <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Shuttle Seat Manifest Grid</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           {bookedSeats}/{totalSeats} booked · {availableSeats} available
           {lockedSeats > 0 ? ` · ${lockedSeats} locked` : ""}
         </p>
 
-        <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden mb-6 border border-slate-800">
+        <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden mb-6 border border-slate-200 dark:border-slate-800">
           <div
             className={`h-full rounded-full transition-all ${
               bookedSeats === totalSeats
                 ? "bg-emerald-500"
                 : bookedSeats > 0
                 ? "bg-amber-400"
-                : "bg-slate-700"
+                : "bg-slate-400 dark:bg-slate-700"
             }`}
             style={{
               width: `${totalSeats > 0 ? Math.round((bookedSeats / totalSeats) * 100) : 0}%`,
@@ -192,8 +191,8 @@ export default async function DriverTripDetailPage({
           />
         </div>
 
-        <div className="bg-slate-950/90 rounded-3xl p-6 max-w-sm mx-auto border border-slate-800/80">
-          <div className="w-full bg-slate-900 rounded-2xl py-2 px-3 mb-6 text-center text-xs text-amber-400 font-extrabold border border-slate-800">
+        <div className="bg-slate-50 dark:bg-slate-950/90 rounded-3xl p-6 max-w-sm mx-auto border border-slate-200 dark:border-slate-800/80">
+          <div className="w-full bg-slate-200 dark:bg-slate-900 rounded-2xl py-2 px-3 mb-6 text-center text-xs text-amber-600 dark:text-amber-400 font-extrabold border border-slate-300 dark:border-slate-800">
             DRIVER CABIN &amp; FRONT WINDSHIELD
           </div>
 
@@ -208,9 +207,9 @@ export default async function DriverTripDetailPage({
                   key={seat.id}
                   className={`
                     h-16 rounded-2xl border flex flex-col items-center justify-center text-xs font-extrabold transition-all shadow-md p-1
-                    ${isAvailable ? "bg-slate-900/80 border-slate-800 text-slate-400" : ""}
-                    ${isLocked ? "bg-amber-950/90 border-amber-500/50 text-amber-300" : ""}
-                    ${isBooked ? "bg-emerald-600/90 border-emerald-400/50 text-white" : ""}
+                    ${isAvailable ? "bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400" : ""}
+                    ${isLocked ? "bg-amber-100 dark:bg-amber-950/90 border-amber-400 dark:border-amber-500/50 text-amber-800 dark:text-amber-300" : ""}
+                    ${isBooked ? "bg-emerald-600 border-emerald-400/50 text-white" : ""}
                   `}
                 >
                   <span className="font-mono text-sm">{seat.seatNumber}</span>

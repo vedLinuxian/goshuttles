@@ -116,10 +116,10 @@ export function DriverTripsClient({
       {/* Top Header */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-black tracking-tight text-white sm:text-3xl">
-            <Route className="h-7 w-7 text-amber-400" /> My Shuttle Trips Manifest
+          <h1 className="flex items-center gap-2.5 text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+            <Route className="h-7 w-7 text-amber-500" /> My Shuttle Trips Manifest
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             All schedules are synchronized in Indian Standard Time (IST UTC+05:30). Past unstarted trips are automatically archived.
           </p>
         </div>
@@ -135,12 +135,12 @@ export function DriverTripsClient({
         <div
           className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between border ${
             feedback.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400"
           }`}
         >
           <span>{feedback.message}</span>
-          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white font-mono text-xs">
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white font-mono text-xs">
             ✕
           </button>
         </div>
@@ -149,7 +149,7 @@ export function DriverTripsClient({
       {/* Filter & Search Bar */}
       <form
         method="get"
-        className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_130px_auto]"
+        className="grid gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_130px_auto]"
       >
         <SearchBar placeholder="Search route (Ayodhya, Lucknow), vehicle..." className="min-w-0" debounceMs={0} navigateOnChange={false} />
         <Select name="status" defaultValue={statusFilter}>
@@ -172,7 +172,7 @@ export function DriverTripsClient({
           {hasActiveFilters && (
             <Link
               href="/driver/trips"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 px-3 text-xs font-bold text-slate-400 hover:bg-slate-800 hover:text-white"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
               title="Reset filters"
             >
               <X className="h-4 w-4" />
@@ -183,26 +183,26 @@ export function DriverTripsClient({
 
       {/* Trips CRUD Table View */}
       {trips.length === 0 ? (
-        <Card variant="glass" className="p-12 text-center sm:p-16 border-slate-800 bg-slate-900/60">
+        <Card variant="glass" className="p-12 text-center sm:p-16 border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60">
           <MapPin className="mx-auto h-12 w-12 text-amber-500/50" />
-          <h2 className="mt-4 text-lg font-bold text-white">No trips found matching filter</h2>
-          <p className="mt-1 text-xs text-slate-400">Schedule your shuttle runs or adjust the filter parameters above.</p>
+          <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">No trips found matching filter</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Schedule your shuttle runs or adjust the filter parameters above.</p>
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1050px] text-left">
-              <thead className="border-b border-slate-800 bg-slate-950/50">
+              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50">
                 <tr>
-                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Seq &amp; Route</th>
-                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Scheduled Departure (IST)</th>
-                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Vehicle / Fleet</th>
-                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Occupancy &amp; Seats</th>
-                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</th>
-                  <th className="px-5 py-3.5 text-right text-[10px] font-bold uppercase tracking-wider text-slate-400">Manage &amp; Roster Actions</th>
+                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Seq &amp; Route</th>
+                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Scheduled Departure (IST)</th>
+                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Vehicle / Fleet</th>
+                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Occupancy &amp; Seats</th>
+                  <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                  <th className="px-5 py-3.5 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Manage &amp; Roster Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
                 {trips.map((t) => {
                   const isExpired = t.isCancelled && t.cancellationReason?.toLowerCase().includes("expired");
                   const occupancyPct = t.totalSeats > 0 ? Math.round((t.bookedSeats / t.totalSeats) * 100) : 0;
@@ -210,45 +210,45 @@ export function DriverTripsClient({
                   const isInProgress = t.status === "IN_PROGRESS";
 
                   return (
-                    <tr key={t.id} className="transition-colors hover:bg-slate-800/30">
+                    <tr key={t.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/30">
                       {/* Seq & Route */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
+                          <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
                             #{t.tripSequence}
                           </span>
                         </div>
-                        <p className="font-extrabold text-sm text-white flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <p className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                           {t.source.name} → {t.destination.name}
                         </p>
                       </td>
 
                       {/* Scheduled Departure (IST) */}
                       <td className="px-5 py-4">
-                        <p className="font-bold text-xs text-white flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <p className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                           {formatIST(t.startTime, "datetime")}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Indian Standard Time (IST)</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Indian Standard Time (IST)</p>
                       </td>
 
                       {/* Vehicle */}
                       <td className="px-5 py-4">
-                        <p className="font-mono text-xs font-bold text-slate-200">{t.vehicle.regNumber}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{t.vehicle.modelName}</p>
+                        <p className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">{t.vehicle.regNumber}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{t.vehicle.modelName}</p>
                       </td>
 
                       {/* Occupancy */}
                       <td className="px-5 py-4">
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                           <span>{t.bookedSeats}/{t.totalSeats} seats</span>
-                          <span className="text-amber-400">{occupancyPct}%</span>
+                          <span className="text-amber-600 dark:text-amber-400">{occupancyPct}%</span>
                         </div>
-                        <div className="w-28 h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-28 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
-                              occupancyPct >= 80 ? "bg-emerald-400" : occupancyPct >= 40 ? "bg-amber-400" : "bg-slate-600"
+                              occupancyPct >= 80 ? "bg-emerald-500" : occupancyPct >= 40 ? "bg-amber-400" : "bg-slate-400 dark:bg-slate-600"
                             }`}
                             style={{ width: `${occupancyPct}%` }}
                           />
@@ -258,7 +258,7 @@ export function DriverTripsClient({
                       {/* Status */}
                       <td className="px-5 py-4">
                         {isExpired ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-300 dark:border-slate-700">
                             <Archive className="h-3 w-3" /> EXPIRED &amp; ARCHIVED
                           </span>
                         ) : (
@@ -279,7 +279,7 @@ export function DriverTripsClient({
                           </Badge>
                         )}
                         {t.cancellationReason && !isExpired && (
-                          <p className="text-[10px] text-rose-400 mt-1 truncate max-w-[150px]">{t.cancellationReason}</p>
+                          <p className="text-[10px] text-rose-500 dark:text-rose-400 mt-1 truncate max-w-[150px]">{t.cancellationReason}</p>
                         )}
                       </td>
 
@@ -290,7 +290,7 @@ export function DriverTripsClient({
                           {isScheduled && (
                             <Link
                               href={`/driver/offline-book?tripId=${t.id}`}
-                              className="px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[11px] font-extrabold flex items-center gap-1 transition-all"
+                              className="px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-extrabold flex items-center gap-1 transition-all"
                               title="Walk-up Cash Booking"
                             >
                               + Walk-up
@@ -300,7 +300,7 @@ export function DriverTripsClient({
                           {/* View Roster & Manifest */}
                           <Link
                             href={`/driver/trips/${t.id}`}
-                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-extrabold flex items-center gap-1 transition-all"
+                            className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white text-[11px] font-extrabold flex items-center gap-1 transition-all"
                           >
                             Manifest &amp; Roster →
                           </Link>
@@ -310,7 +310,7 @@ export function DriverTripsClient({
                             <button
                               type="button"
                               onClick={() => setCancelModalTrip(t)}
-                              className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                              className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-colors"
                               title="Cancel / Archive Trip"
                             >
                               <XCircle className="h-4 w-4" />
@@ -331,24 +331,24 @@ export function DriverTripsClient({
 
       {/* Cancel Modal */}
       <Dialog open={Boolean(cancelModalTrip)} onOpenChange={(open) => !open && setCancelModalTrip(null)}>
-        <DialogContent className="sm:max-w-md bg-[#0c101c] border-rose-500/30 text-white rounded-3xl p-6 shadow-2xl">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#0c101c] border-slate-200 dark:border-rose-500/30 text-slate-900 dark:text-white rounded-3xl p-6 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-rose-400 font-extrabold flex items-center gap-2">
+            <DialogTitle className="text-rose-600 dark:text-rose-400 font-extrabold flex items-center gap-2">
               <XCircle className="h-5 w-5" /> Cancel Shuttle Trip
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-sm mt-1">
-              Are you sure you want to cancel trip <strong className="text-white">#{cancelModalTrip?.tripSequence}</strong> ({cancelModalTrip?.source.name} → {cancelModalTrip?.destination.name})?
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+              Are you sure you want to cancel trip <strong className="text-slate-900 dark:text-white">#{cancelModalTrip?.tripSequence}</strong> ({cancelModalTrip?.source.name} → {cancelModalTrip?.destination.name})?
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 my-2">
-            <label className="text-xs font-bold text-slate-300">Cancellation Reason (Optional)</label>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Cancellation Reason (Optional)</label>
             <input
               type="text"
               placeholder="e.g. Vehicle breakdown, severe weather..."
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500/50"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:border-rose-500/50"
             />
           </div>
 

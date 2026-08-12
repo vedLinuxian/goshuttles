@@ -258,14 +258,14 @@ export function RealtimeGpsTracker({
 
       {/* Driver GPS Controls Panel */}
       {isDriver && (
-        <div className="p-4 bg-slate-900/90 border-t border-slate-800 space-y-3">
+        <div className="p-4 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h4 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Radio className="h-4 w-4 text-amber-400" />
+              <h4 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Radio className="h-4 w-4 text-amber-500" />
                 Driver Mobile Phone GPS Live Stream
               </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 Stream real-time location from your Android / Phone device to passenger tickets &amp; admin dispatch.
               </p>
             </div>
@@ -293,7 +293,7 @@ export function RealtimeGpsTracker({
           </div>
 
           {gpsError && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center gap-2">
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{gpsError}</span>
             </div>
@@ -301,5 +301,6 @@ export function RealtimeGpsTracker({
         </div>
       )}
     </Card>
+
   );
 }

@@ -28,23 +28,23 @@ export async function autoArchiveExpiredTrips(driverId?: string) {
 
     if (expiredTrips.length === 0) return 0;
 
-    const expiredIds = expiredTrips.map((t) => t.id);
+    let archivedCount = 0;
+    for (const trip of expiredTrips) {
+      try {
+        await cancelTrip(trip.id, "Expired — Scheduled departure time passed without departure");
+        archivedCount++;
+      } catch (err) {
+        console.error(`Failed to cancel expired trip ${trip.id}:`, err);
+      }
+    }
 
-    await db.trip.updateMany({
-      where: { id: { in: expiredIds } },
-      data: {
-        status: "CANCELLED",
-        isCancelled: true,
-        cancellationReason: "Expired — Departure time passed without driver departure",
-      },
-    });
-
-    return expiredIds.length;
+    return archivedCount;
   } catch (err) {
     console.error("Failed to auto-archive expired trips:", err);
     return 0;
   }
 }
+
 
 export async function checkScheduleConflicts(
 
@@ -633,6 +633,14 @@ export async function completeTrip(tripId: string) {
     }
 
     const updatedTrip = await tx.trip.findUniqueOrThrow({ where: { id: tripId } });
+
+    if (trip.driverId) {
+      await tx.driverProfile.updateMany({
+        where: { userId: trip.driverId },
+        data: { totalTrips: { increment: 1 } },
+      });
+    }
+
 
     // Confirmed bookings → COMPLETED
     await tx.booking.updateMany({
