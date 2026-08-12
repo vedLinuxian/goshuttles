@@ -181,21 +181,27 @@ export async function finalizePassengerBooking(params: {
       });
     }
 
-    // Auto-issue digital boarding pass so ticket pass is immediately available to passenger & driver
-    await issueTicket(tx, {
-      bookingId: booking.id,
-      passengerName: params.guestName,
-      passengerPhone: null,
-      tripDate: booking.trip.startTime,
-      source: booking.trip.source.name,
-      destination: booking.trip.destination.name,
-      seatNumber: booking.seat.seatNumber,
-      ticketPrice: Number(booking.totalAmount),
-      status: "ISSUED",
-    });
+    // TICKET GATE:
+    // - ONLINE bookings: issue a provisional "ISSUED" ticket immediately (passenger has paid; pending admin UTR verification)
+    // - CASH bookings: DO NOT issue ticket here. Ticket is issued ONLY when the driver/admin physically
+    //   confirms cash collection via confirmBookingPayment(). This prevents fraudulent boarding.
+    if (params.paymentMode === "ONLINE") {
+      await issueTicket(tx, {
+        bookingId: booking.id,
+        passengerName: params.guestName,
+        passengerPhone: null,
+        tripDate: booking.trip.startTime,
+        source: booking.trip.source.name,
+        destination: booking.trip.destination.name,
+        seatNumber: booking.seat.seatNumber,
+        ticketPrice: Number(booking.totalAmount),
+        status: "ISSUED",
+      });
+    }
 
     return updated;
   });
+
 }
 
 // ============================================================

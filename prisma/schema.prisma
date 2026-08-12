@@ -42,6 +42,7 @@ model User {
   seatReservations   TripSeat[]            @relation("SeatBookedBy")
   reviewsAsPassenger Review[]              @relation("ReviewPassenger")
   reviewsAsDriver    Review[]              @relation("ReviewDriver")
+  issuedInvoices     Invoice[]             @relation("InvoicesIssued")
 
   @@index([role, isActive])
   @@map("users")
@@ -320,6 +321,8 @@ model Booking {
   platformLedger      PlatformLedger?
   review              Review?
   complaints          Complaint[]
+  invoice             Invoice?
+
 
   @@index([tripId, status])
   @@index([userId, status])
@@ -630,3 +633,39 @@ enum RefundStatus {
   COMPLETED
   FAILED
 }
+
+// ============================================================
+// INVOICE — financial document for a confirmed booking
+// ============================================================
+
+model Invoice {
+  id            String        @id @default(uuid())
+  bookingId     String        @unique @map("booking_id")
+  issuedById    String        @map("issued_by_id")
+  invoiceNumber String        @unique @map("invoice_number")
+  status        InvoiceStatus @default(UNPAID) @map("status")
+  baseAmount    Decimal       @map("base_amount")
+  taxAmount     Decimal       @default(0) @map("tax_amount")
+  totalAmount   Decimal       @map("total_amount")
+  notes         String?
+  issuedAt      DateTime      @default(now()) @map("issued_at")
+  paidAt        DateTime?     @map("paid_at")
+  expiresAt     DateTime?     @map("expires_at")
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at")
+
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  issuedBy User    @relation("InvoicesIssued", fields: [issuedById], references: [id])
+
+  @@index([status, issuedAt])
+  @@index([bookingId])
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  PARTIALLY_PAID
+  VOID
+  EXPIRED
+}
+

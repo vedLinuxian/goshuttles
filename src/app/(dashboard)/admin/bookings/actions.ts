@@ -2,7 +2,8 @@
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { cancelBooking, confirmBookingPayment } from "@/lib/booking-service";
+import { cancelBooking } from "@/lib/booking-service";
+import { adminCollectCashAndIssueInvoice } from "@/app/actions/invoice-actions";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -21,36 +22,24 @@ function revalidateBookingSurfaces(bookingId: string) {
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/tickets");
   revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/finance");
   revalidatePath("/admin/trips/approvals");
   revalidatePath("/passenger/bookings");
   revalidatePath(`/passenger/booking/${bookingId}`);
 }
 
+/** Admin confirms CASH payment → ticket + PAID invoice generated atomically */
 export async function confirmAdminCashPayment(bookingId: string) {
-  const adminId = await requireAdmin();
+  await requireAdmin();
   if (!bookingIdSchema.safeParse(bookingId).success) throw new Error("Invalid booking ID.");
 
-  const booking = await db.booking.findUnique({
-    where: { id: bookingId },
-    select: { paymentMode: true, status: true, tripId: true },
-  });
-  if (!booking) throw new Error("Booking not found.");
-  if (booking.paymentMode !== "CASH") throw new Error("Only cash bookings can be confirmed here.");
-  if (booking.status !== "PENDING") throw new Error("Booking is no longer pending.");
+  const result = await adminCollectCashAndIssueInvoice(bookingId, "Cash confirmed by admin.");
+  if (!result.success) throw new Error(result.error || "Confirmation failed.");
 
-  await confirmBookingPayment(bookingId, adminId, "ADMIN");
-  await db.activityLog.create({
-    data: {
-      userId: adminId,
-      action: "ADMIN_CONFIRM_CASH_PAYMENT",
-      targetType: "booking",
-      targetId: bookingId,
-      metadata: { tripId: booking.tripId },
-    },
-  });
   revalidateBookingSurfaces(bookingId);
   return { success: true };
 }
+
 
 export async function cancelAdminBooking(bookingId: string, reason?: string) {
   const adminId = await requireAdmin();

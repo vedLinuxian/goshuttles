@@ -37,16 +37,19 @@ export const navigationByRole: Record<Role, NavSection[]> = {
       { label: "Vehicles", href: "/admin/vehicles", icon: Car },
       { label: "Drivers", href: "/admin/drivers", icon: Users },
       { label: "Assign Vehicle", href: "/admin/assign", icon: Link2 },
-      { label: "Finance", href: "/admin/finance", icon: Wallet },
+      { label: "Finance & Settlements", href: "/admin/finance", icon: Wallet },
+      { label: "Invoice Register", href: "/admin/finance/invoices", icon: FileText },
       { label: "Settings", href: "/admin/settings", icon: Settings },
     ] },
   ],
+
   DRIVER: [
     { title: "Operations", items: [
       { label: "Live Dashboard", href: "/driver/dashboard", icon: LayoutDashboard },
-      { label: "Pending Confirmations", href: "/driver/bookings/pending", icon: ClipboardCheck },
+      { label: "Cash Collection", href: "/driver/bookings/pending", icon: Wallet },
       { label: "My Trips", href: "/driver/trips", icon: History, children: ["/driver/trips/"] },
     ] },
+
     { title: "Quick Actions", items: [
       { label: "Schedule Trip", href: "/driver/trips/new", icon: PlusCircle },
       { label: "Offline Booking", href: "/driver/offline-book", icon: Ticket },

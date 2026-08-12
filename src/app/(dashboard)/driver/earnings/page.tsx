@@ -37,27 +37,59 @@ export default async function EarningsPage({
         <Card variant="glass" className="p-5 border-slate-800">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
             <TrendingUp className="h-4 w-4 text-emerald-400" />
-            Total Earnings
+            Total Gross Earnings
           </div>
           <p className="text-2xl font-extrabold text-emerald-400">₹{earnings.totalEarnings}</p>
+          <p className="text-[10px] text-slate-500 mt-1">Cumulative revenue across all collected trips</p>
         </Card>
 
         <Card variant="glass" className="p-5 border-slate-800">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
             <TrendingDown className="h-4 w-4 text-rose-400" />
-            Commission Deductions
+            Platform Commission
           </div>
           <p className="text-2xl font-extrabold text-rose-400">₹{earnings.totalDeductions}</p>
+          <p className="text-[10px] text-slate-500 mt-1">Total commission owed / deducted by platform</p>
         </Card>
 
-        <Card variant="glass" className="p-5 border-slate-800">
+        <Card
+          variant="glass"
+          className={`p-5 border ${
+            Number(earnings.netEarnings) < 0
+              ? "border-rose-500/30 bg-rose-500/5"
+              : "border-slate-800"
+          }`}
+        >
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
             <Wallet className="h-4 w-4 text-amber-400" />
-            Net Wallet Balance
+            Platform Wallet Balance
           </div>
-          <p className="text-2xl font-extrabold text-amber-400">₹{earnings.netEarnings}</p>
+          <p className={`text-2xl font-extrabold ${
+            Number(earnings.netEarnings) < 0 ? "text-rose-400" : "text-amber-400"
+          }`}>
+            {Number(earnings.netEarnings) < 0 ? "-" : "+"}₹{Math.abs(Number(earnings.netEarnings))}
+          </p>
+          {Number(earnings.netEarnings) < 0 && (
+            <p className="text-[10px] text-rose-400 mt-1 font-semibold">
+              ⚠ Commission owed to platform — settle at next payout
+            </p>
+          )}
+          {Number(earnings.netEarnings) >= 0 && (
+            <p className="text-[10px] text-slate-500 mt-1">Net balance after all commissions</p>
+          )}
         </Card>
       </div>
+
+      {/* Wallet semantics explanation */}
+      <div className="flex items-start gap-3 p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400">
+        <IndianRupee className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+        <div className="space-y-1">
+          <p className="font-bold text-slate-300">How your wallet works</p>
+          <p><span className="text-emerald-400 font-semibold">CASH bookings:</span> You collect full fare from passengers. Platform debits its commission from your wallet balance. A negative balance means you owe that commission to GoShuttles.</p>
+          <p><span className="text-indigo-400 font-semibold">ONLINE bookings:</span> Platform collects the fare, credits your net share (fare minus commission) to your wallet.</p>
+        </div>
+      </div>
+
 
       <Card variant="glass" className="overflow-hidden border-slate-800 p-0">
         <Table>
