@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Search, ChevronDown, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,8 +36,37 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const [coords, setCoords] = React.useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
+  const [mounted, setMounted] = React.useState(false);
+
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = React.useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + 6,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  }, []);
+
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (!open) {
+      updatePosition();
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  };
 
   const selectedOption = React.useMemo(
     () => options.find((opt) => opt.value === value),
@@ -56,17 +86,33 @@ export function SearchableSelect({
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        !document.getElementById("searchable-select-portal")?.contains(target)
+      ) {
         setOpen(false);
       }
     };
+
+    const handleScrollOrResize = () => {
+      if (open) {
+        updatePosition();
+      }
+    };
+
     if (open) {
       document.addEventListener("mousedown", handleClickOutside);
+      window.addEventListener("scroll", handleScrollOrResize, true);
+      window.addEventListener("resize", handleScrollOrResize);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
     };
-  }, [open]);
+  }, [open, updatePosition]);
 
   React.useEffect(() => {
     if (open && searchInputRef.current) {
@@ -87,14 +133,15 @@ export function SearchableSelect({
   };
 
   return (
-    <div className={cn("relative w-full", open ? "z-40" : "z-10", className)} ref={containerRef}>
+    <div className={cn("relative w-full", className)} ref={containerRef}>
       {/* Trigger Button */}
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggleOpen}
         className={cn(
-          "flex min-h-11 w-full items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#060911] px-3.5 py-2 text-xs font-semibold text-slate-900 dark:text-white transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer hover:border-amber-500/40",
+          "flex min-h-11 w-full items-center justify-between rounded-xl border border-slate-700/80 dark:border-slate-800 bg-[#060911] px-3.5 py-2 text-xs font-semibold text-white transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer hover:border-amber-500/50",
           open && "border-amber-500 ring-2 ring-amber-500/30"
         )}
       >
@@ -102,17 +149,17 @@ export function SearchableSelect({
           {selectedOption ? (
             <>
               {selectedOption.icon && <selectedOption.icon className="h-4 w-4 text-amber-500 shrink-0" />}
-              <span className="truncate font-bold text-slate-900 dark:text-white">
+              <span className="truncate font-bold text-white">
                 {selectedOption.label}
               </span>
               {selectedOption.badge && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
                   {selectedOption.badge}
                 </span>
               )}
             </>
           ) : (
-            <span className="text-slate-400 dark:text-slate-500">{placeholder}</span>
+            <span className="text-slate-500">{placeholder}</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -129,9 +176,19 @@ export function SearchableSelect({
         </div>
       </button>
 
-      {/* Popover Dropdown with Centralised Searchbar */}
-      {open && (
-        <div className="absolute left-0 right-0 z-[9999] mt-1.5 w-full rounded-2xl border border-slate-700 dark:border-slate-800 bg-slate-950 dark:bg-[#0c101c] p-2.5 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] backdrop-blur-2xl ring-1 ring-amber-500/30 animate-in fade-in-0 zoom-in-95">
+      {/* React Portal Dropdown (Renders directly at body level — NEVER CLIPPED) */}
+      {open && mounted && createPortal(
+        <div
+          id="searchable-select-portal"
+          style={{
+            position: "fixed",
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            zIndex: 99999,
+          }}
+          className="rounded-2xl border border-slate-700 bg-[#0c101c] p-2.5 shadow-[0_30px_90px_rgba(0,0,0,0.9)] backdrop-blur-2xl ring-1 ring-amber-500/30 animate-in fade-in-0 zoom-in-95"
+        >
           {/* Centralized Search Bar */}
           <div className="relative mb-2 px-1">
             <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -141,7 +198,7 @@ export function SearchableSelect({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/80 pl-9 pr-3 py-2 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 pl-9 pr-8 py-2 text-xs font-semibold text-white placeholder:text-slate-500 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
             />
             {search && (
               <button
@@ -157,7 +214,7 @@ export function SearchableSelect({
           {/* Options List */}
           <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
             {filteredOptions.length === 0 ? (
-              <div className="py-6 text-center text-xs font-semibold text-slate-400 dark:text-slate-500">
+              <div className="py-6 text-center text-xs font-semibold text-slate-500">
                 {emptyText}
               </div>
             ) : (
@@ -172,7 +229,7 @@ export function SearchableSelect({
                       "flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold cursor-pointer transition-all",
                       isSelected
                         ? "bg-amber-500 text-slate-950 font-bold"
-                        : "text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900/90"
+                        : "text-slate-200 hover:bg-slate-900"
                     )}
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -206,7 +263,8 @@ export function SearchableSelect({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
