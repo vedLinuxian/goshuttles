@@ -1,173 +1,85 @@
-"use client";
-
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { cancelTrip, getTripDetail } from "@/app/actions/trip-actions";
+import { auth } from "@/auth";
+import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  MapPin,
-  Calendar,
-  Car,
-  Users,
-  Loader2,
-  Play,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Radio,
-} from "lucide-react";
-import { Card, Badge, Button, Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui";
+import { ArrowLeft, MapPin, Calendar, Car, Users, Route } from "lucide-react";
+import { Card, Badge } from "@/components/ui";
 import { RealtimeGpsTracker } from "@/components/tracking/RealtimeGpsTracker";
-import { TripStartValidationModal } from "@/components/trips/TripStartValidationModal";
-import { TripCompleteModal } from "@/components/trips/TripCompleteModal";
+import { BoardingDeskComponent } from "@/components/trips/BoardingDeskComponent";
+import { DriverTripControls } from "./driver-trip-controls";
+import { formatIST } from "@/lib/date-utils";
 
-type SeatData = {
-  id: string;
-  seatNumber: string;
-  seatType: string;
-  price: string;
-  status: string;
-  lockedAt: string | null;
-};
-
-type BookingData = {
-  id: string;
-  status: string;
-  totalAmount: string;
-  paymentMode: string;
-  paymentStatus: string;
-  guestName: string | null;
-  createdAt: string;
-  user: { id: string; name: string | null; phone: string | null } | null;
-  seat: { id: string; seatNumber: string; seatType: string; price: string; status: string };
-  ticket: { ticketNumber: string; status: string } | null;
-};
-
-type Availability = {
-  totalSeats: number;
-  bookedSeats: number;
-  availableSeats: number;
-  lockedSeats: number;
-};
-
-type TripData = {
-  id: string;
-  tripSequence: number;
-  status: string;
-  startTime: string;
-  actualStartTime: string | null;
-  actualEndTime: string | null;
-  manifestLocked: boolean;
-  isCancelled: boolean;
-  cancellationReason: string | null;
-  currentLat: number | null;
-  currentLong: number | null;
-  lastLocationUpdate: string | null;
-  source: { id: string; name: string };
-  destination: { id: string; name: string };
-  vehicle: { id: string; regNumber: string; modelName: string; vehicleType: string };
-  driver: { id: string; name: string | null; phone: string | null } | null;
-  availability: Availability;
-  seats: SeatData[];
-  bookings: BookingData[];
-};
+export const dynamic = "force-dynamic";
 
 const STATUS_LABELS: Record<string, string> = {
   SCHEDULED: "Scheduled",
   IN_PROGRESS: "In Progress",
   COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
+  CANCELLED: "Cancelled / Expired",
+  PENDING_APPROVAL: "Pending Approval",
+  REJECTED: "Declined",
 };
 
-export default function DriverTripDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const tripId = id;
-  const router = useRouter();
+export default async function DriverTripDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
 
-  const [trip, setTrip] = useState<TripData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState("");
-  const [showCancelInput, setShowCancelInput] = useState(false);
+  const { id: tripId } = await params;
 
-  // Modals
-  const [showStartModal, setShowStartModal] = useState(false);
-  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const trip = await db.trip.findUnique({
+    where: { id: tripId },
+    include: {
+      source: true,
+      destination: true,
+      vehicle: true,
+      driver: { select: { id: true, name: true, phone: true } },
+      seats: { orderBy: { seatNumber: "asc" } },
+      bookings: {
+        include: {
+          user: { select: { id: true, name: true, phone: true } },
+          seat: true,
+          ticket: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
 
-  const fetchTrip = useCallback(async () => {
-    const result = await getTripDetail(tripId);
-    if (result.success && result.data) {
-      setTrip(result.data as unknown as TripData);
-      setError(null);
-    } else {
-      setError(result.error ?? "Failed to load trip.");
-    }
-    setLoading(false);
-  }, [tripId]);
-
-  useEffect(() => {
-    let active = true;
-    getTripDetail(tripId).then((result) => {
-      if (!active) return;
-      if (result.success && result.data) {
-        setTrip(result.data as unknown as TripData);
-        setError(null);
-      } else {
-        setError(result.error ?? "Failed to load trip.");
-      }
-      setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [tripId]);
-
-  const handleCancel = async () => {
-    const reason = cancelReason.trim() || undefined;
-    if (!confirm(reason ? `Cancel with reason: "${reason}"?` : "Cancel this trip? This will release all seats.")) return;
-    setActionLoading("cancel");
-    setActionError(null);
-    const res = await cancelTrip(tripId, reason);
-    if (res.success) {
-      setShowCancelInput(false);
-      setCancelReason("");
-      await fetchTrip();
-    } else {
-      setActionError(res.error ?? "Failed to cancel trip.");
-    }
-    setActionLoading(null);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
-      </div>
-    );
+  if (!trip) {
+    redirect("/driver/trips");
   }
 
-  if (error || !trip) {
-    return (
-      <Card variant="glass" className="text-center py-16 p-8 space-y-3 max-w-md mx-auto border-slate-800">
-        <AlertTriangle className="h-10 w-10 mx-auto text-rose-400" />
-        <h2 className="text-xl font-extrabold text-white">Trip Not Found</h2>
-        <p className="text-xs text-slate-400">{error ?? "The trip you're looking for doesn't exist."}</p>
-        <Link href="/driver/trips">
-          <Button variant="secondary" size="sm" className="mt-2 font-bold text-amber-400">
-            ← Back to My Trips
-          </Button>
-        </Link>
-      </Card>
-    );
+  const isAuthorized =
+    session.user.role === "ADMIN" ||
+    session.user.isImpersonating ||
+    (session.user.role === "DRIVER" && (trip.driverId === session.user.id || !trip.driverId));
+
+  if (!isAuthorized) {
+    redirect("/driver/trips");
   }
 
-  const canStart = trip.status === "SCHEDULED";
-  const canComplete = trip.status === "IN_PROGRESS";
-  const canCancel = trip.status === "SCHEDULED" || trip.status === "IN_PROGRESS";
-  const isTerminal = trip.status === "COMPLETED" || trip.status === "CANCELLED";
+  const totalSeats = trip.seats.length;
+  const bookedSeats = trip.seats.filter((s) => s.status === "BOOKED").length;
+  const availableSeats = trip.seats.filter((s) => s.status === "AVAILABLE").length;
+  const lockedSeats = trip.seats.filter((s) => s.status === "LOCKED").length;
+
+  const boardingManifest = trip.bookings.map((b) => ({
+    ticketId: b.ticket?.id ?? null,
+    ticketNumber: b.ticket?.ticketNumber ?? null,
+    bookingId: b.id,
+    passengerName: b.guestName || b.user?.name || "Passenger",
+    passengerPhone: b.user?.phone || null,
+    seatNumber: b.seat?.seatNumber ?? "N/A",
+    paymentMode: b.paymentMode,
+    paymentStatus: b.paymentStatus,
+    bookingStatus: b.status,
+    ticketStatus: b.ticket?.status ?? null,
+    usedAt: b.ticket?.usedAt ? new Date(b.ticket.usedAt).toISOString() : null,
+  }));
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
@@ -179,18 +91,12 @@ export default function DriverTripDetailPage() {
         Back to My Trips
       </Link>
 
-      {actionError && (
-        <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
-          {actionError}
-        </div>
-      )}
-
       {/* Header card */}
       <Card variant="glass" className="p-6 space-y-4 border-slate-800 shadow-2xl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
                 #{trip.tripSequence}
               </span>
               <Badge
@@ -216,10 +122,7 @@ export default function DriverTripDetailPage() {
             <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-300">
               <span className="flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-amber-400" />
-                {new Date(trip.startTime).toLocaleString("en-IN", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
+                {formatIST(trip.startTime, "datetime")}
               </span>
               <span className="flex items-center gap-1.5">
                 <Car className="h-4 w-4 text-amber-400" />
@@ -234,82 +137,31 @@ export default function DriverTripDetailPage() {
             </div>
           </div>
 
-          {!isTerminal && (
-            <div className="flex items-center gap-2 shrink-0">
-              {canStart && (
-                <Button
-                  onClick={() => setShowStartModal(true)}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs gap-1.5 shadow-md glow-emerald cursor-pointer"
-                >
-                  <Play className="h-4 w-4 fill-slate-950" />
-                  Depart &amp; Start Trip
-                </Button>
-              )}
-
-              {canComplete && (
-                <Button
-                  onClick={() => setShowCompleteModal(true)}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md glow-amber cursor-pointer"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Complete Trip
-                </Button>
-              )}
-
-              {canCancel && !showCancelInput && (
-                <Button
-                  onClick={() => setShowCancelInput(true)}
-                  disabled={!!actionLoading}
-                  variant="destructive"
-                  className="text-xs gap-1.5 font-bold"
-                >
-                  <XCircle className="h-4 w-4" /> Cancel
-                </Button>
-              )}
-            </div>
-          )}
+          <DriverTripControls
+            tripId={trip.id}
+            status={trip.status}
+            sequence={trip.tripSequence}
+            sourceName={trip.source.name}
+            destName={trip.destination.name}
+          />
         </div>
 
-        {showCancelInput && canCancel && (
-          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center gap-3">
-            <input
-              type="text"
-              placeholder="Reason for cancellation (optional)"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 outline-none"
-            />
-            <Button
-              onClick={handleCancel}
-              disabled={!!actionLoading}
-              variant="destructive"
-              className="text-xs font-bold w-full sm:w-auto"
-            >
-              {actionLoading === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Cancel"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setShowCancelInput(false);
-                setCancelReason("");
-              }}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              Dismiss
-            </Button>
+        {trip.cancellationReason && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+            Trip Cancellation Note: {trip.cancellationReason}
           </div>
         )}
       </Card>
 
-      {/* Real-time GPS Tracker & Driver Phone Broadcast Module */}
+      {/* Real-time GPS Tracker */}
       <RealtimeGpsTracker
         tripId={trip.id}
         sourceName={trip.source.name}
         destName={trip.destination.name}
-        initialLat={trip.currentLat}
-        initialLong={trip.currentLong}
-        lastLocationUpdate={trip.lastLocationUpdate}
+        initialLat={trip.currentLat ? Number(trip.currentLat) : null}
+        initialLong={trip.currentLong ? Number(trip.currentLong) : null}
+
+        lastLocationUpdate={trip.lastLocationUpdate ? trip.lastLocationUpdate.toISOString() : null}
         status={trip.status}
         isDriver={true}
         driverName={trip.driver?.name}
@@ -317,26 +169,25 @@ export default function DriverTripDetailPage() {
         regNumber={trip.vehicle.regNumber}
       />
 
-      {/* Seat Map Section */}
+      {/* Seat Grid Map */}
       <Card variant="glass" className="p-6 space-y-4 border-slate-800 shadow-2xl">
         <h2 className="text-lg font-extrabold text-white">Shuttle Seat Manifest Grid</h2>
         <p className="text-xs text-slate-400">
-          {trip.availability.bookedSeats}/{trip.availability.totalSeats} booked ·{" "}
-          {trip.availability.availableSeats} available
-          {trip.availability.lockedSeats > 0 ? ` · ${trip.availability.lockedSeats} locked` : ""}
+          {bookedSeats}/{totalSeats} booked · {availableSeats} available
+          {lockedSeats > 0 ? ` · ${lockedSeats} locked` : ""}
         </p>
 
         <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden mb-6 border border-slate-800">
           <div
             className={`h-full rounded-full transition-all ${
-              trip.availability.bookedSeats === trip.availability.totalSeats
+              bookedSeats === totalSeats
                 ? "bg-emerald-500"
-                : trip.availability.bookedSeats > 0
+                : bookedSeats > 0
                 ? "bg-amber-400"
                 : "bg-slate-700"
             }`}
             style={{
-              width: `${trip.availability.totalSeats > 0 ? Math.round((trip.availability.bookedSeats / trip.availability.totalSeats) * 100) : 0}%`,
+              width: `${totalSeats > 0 ? Math.round((bookedSeats / totalSeats) * 100) : 0}%`,
             }}
           />
         </div>
@@ -363,7 +214,7 @@ export default function DriverTripDetailPage() {
                   `}
                 >
                   <span className="font-mono text-sm">{seat.seatNumber}</span>
-                  <span className="text-[9px] font-semibold opacity-90">₹{seat.price}</span>
+                  <span className="text-[9px] font-semibold opacity-90">₹{seat.price.toString()}</span>
                   <span className="text-[8px] uppercase tracking-wider">{seat.status}</span>
                 </div>
               );
@@ -372,86 +223,8 @@ export default function DriverTripDetailPage() {
         </div>
       </Card>
 
-      {/* Booking List Section */}
-      <Card variant="glass" className="p-6 space-y-4 border-slate-800 shadow-2xl">
-        <h2 className="text-lg font-extrabold text-white border-b border-slate-800/80 pb-3">
-          Passenger Manifest Bookings ({trip.bookings.length})
-        </h2>
-
-        {trip.bookings.length === 0 ? (
-          <div className="text-center py-8 text-slate-400 text-xs">
-            No bookings recorded yet for this trip.
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Seat</TableHead>
-                <TableHead>Passenger</TableHead>
-                <TableHead>Ticket Ref</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Payment Status</TableHead>
-                <TableHead>Booking Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {trip.bookings.map((b) => (
-                <TableRow key={b.id} className="hover:bg-slate-800/50 transition-colors">
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono font-bold text-amber-400 border-amber-500/30">
-                      {b.seat.seatNumber}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-bold text-white">
-                    {b.guestName || b.user?.name || "Passenger"}
-                    {b.user?.phone && <div className="text-xs text-slate-400 font-mono">{b.user.phone}</div>}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-300">
-                    {b.ticket ? `#${b.ticket.ticketNumber}` : "—"}
-                  </TableCell>
-                  <TableCell className="font-extrabold text-emerald-400">
-                    ₹{b.totalAmount}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={b.paymentStatus === "COLLECTED" ? "success" : "warning"}>
-                      {b.paymentStatus}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={b.status === "CONFIRMED" || b.status === "COMPLETED" ? "success" : b.status === "CANCELLED" ? "destructive" : "warning"}>
-                      {b.status}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-
-      {/* Validation Modal */}
-      {showStartModal && (
-        <TripStartValidationModal
-          tripId={trip.id}
-          isOpen={showStartModal}
-          isAdmin={false}
-          onClose={() => setShowStartModal(false)}
-          onSuccess={() => fetchTrip()}
-        />
-      )}
-
-      {/* Complete Modal */}
-      {showCompleteModal && (
-        <TripCompleteModal
-          tripId={trip.id}
-          isOpen={showCompleteModal}
-          isAdmin={false}
-          sourceName={trip.source.name}
-          destName={trip.destination.name}
-          onClose={() => setShowCompleteModal(false)}
-          onSuccess={() => fetchTrip()}
-        />
-      )}
+      {/* Interactive Boarding & Passenger Verification Control Desk */}
+      <BoardingDeskComponent tripId={trip.id} manifest={boardingManifest} />
     </div>
   );
 }
