@@ -37,11 +37,10 @@ function readinessWhere(readiness?: AdminTripListParams["readiness"]): Prisma.Tr
   const ready: Prisma.TripWhereInput = {
     manifestLocked: false,
     driver: {
-      is: {
-        isActive: true,
-        driverProfile: { is: { kycStatus: "APPROVED" } },
-      },
+      isActive: true,
+      driverProfile: { kycStatus: "APPROVED" },
     },
+
     bookings: {
       none: {
         OR: [
@@ -100,12 +99,16 @@ export async function getAdminTripList(params: AdminTripListParams = {}) {
 
   const mapped = trips.map((trip) => {
     const seats = { total: trip.seats.length, available: 0, locked: 0, booked: 0 };
-    for (const seat of trip.seats) seats[seat.status.toLowerCase() as "available" | "locked" | "booked"]++;
+    for (const seat of trip.seats) {
+      const key = seat.status ? (seat.status.toLowerCase() as "available" | "locked" | "booked") : "available";
+      if (seats[key] !== undefined) seats[key]++;
+    }
     const bookings = { pending: 0, confirmed: 0, completed: 0, cancelled: 0, noShow: 0 };
     let gross = 0; let collected = 0; let pendingCash = 0; let pendingOnline = 0; let paymentProofs = 0; let ticketsIssued = 0; let ticketsUsed = 0; let ticketGaps = 0;
     for (const booking of trip.bookings) {
-      const key = booking.status === "NO_SHOW" ? "noShow" : booking.status.toLowerCase() as keyof typeof bookings;
-      bookings[key]++;
+      const key = booking.status === "NO_SHOW" ? "noShow" : (booking.status.toLowerCase() as keyof typeof bookings);
+      if (bookings[key] !== undefined) bookings[key]++;
+
       const activeFinancialBooking = ["PENDING", "CONFIRMED", "COMPLETED"].includes(booking.status);
       if (activeFinancialBooking) gross += Number(booking.totalAmount);
       if (activeFinancialBooking && booking.paymentStatus === "COLLECTED") collected += Number(booking.totalAmount);

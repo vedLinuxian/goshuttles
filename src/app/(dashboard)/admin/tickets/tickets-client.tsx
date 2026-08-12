@@ -127,23 +127,26 @@ export function AdminTicketsClient({
 
   const hasActiveFilters = Boolean(filters.q || filters.status || filters.date || filters.route || filters.paymentStatus);
 
-  const handleCollectCash = async () => {
+  const handleCollectCash = () => {
     if (!collectModal) return;
     setActionError(null);
     setActionSuccess(null);
-    try {
-      const res = await adminTicketCollectCashAction(collectModal.bookingId);
-      if (!res.success) throw new Error(res.error);
-      setActionSuccess("Cash collected! Ticket confirmed & PAID invoice generated.");
-      startTransition(() => router.refresh());
-      setTimeout(() => {
-        setCollectModal(null);
-        setActionSuccess(null);
-      }, 2000);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Collection failed.");
-    }
+    startTransition(async () => {
+      try {
+        const res = await adminTicketCollectCashAction(collectModal.bookingId);
+        if (!res.success) throw new Error(res.error);
+        setActionSuccess("✅ Cash collected! Ticket confirmed & PAID invoice generated.");
+        router.refresh();
+        setTimeout(() => {
+          setCollectModal(null);
+          setActionSuccess(null);
+        }, 1200);
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Collection failed.");
+      }
+    });
   };
+
 
   // Count pending cash bookings on this page
   const pendingCashCount = tickets.filter(

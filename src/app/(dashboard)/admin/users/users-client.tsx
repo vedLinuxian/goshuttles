@@ -22,7 +22,9 @@ import {
   User,
   Sparkles,
   RefreshCw,
+  UserCheck,
 } from "lucide-react";
+
 import {
   Card,
   Button,
@@ -309,7 +311,21 @@ export function UsersClient({
                         </TableCell>
                         <TableCell className="text-right py-3.5">
                           <div className="flex items-center justify-end gap-2">
+                            {/* Login As (Impersonate User) Button */}
+                            {!isSelf && u.isActive && (
+                              <a
+                                href={`/api/auth/impersonate?userId=${u.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="h-8 px-2.5 text-[11px] bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 font-extrabold rounded-lg inline-flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                title={`Login as ${u.name || u.role} in a new tab (Temporary Session)`}
+                              >
+                                <UserCheck className="h-3.5 w-3.5 text-indigo-400" /> Login As
+                              </a>
+                            )}
+
                             {/* Password Reset Action Button */}
+
                             <Button
                               size="sm"
                               disabled={isPending}
@@ -410,7 +426,20 @@ export function UsersClient({
                     </span>
 
                     <div className="flex items-center gap-2">
+                      {!isSelf && u.isActive && (
+                        <a
+                          href={`/api/auth/impersonate?userId=${u.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="h-8 px-2.5 text-[11px] bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 font-extrabold rounded-lg inline-flex items-center gap-1 cursor-pointer transition-all"
+                          title={`Login as ${u.name || u.role} in a new tab`}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" /> Login As
+                        </a>
+                      )}
+
                       <Button
+
                         size="sm"
                         disabled={isPending}
                         onClick={() => {

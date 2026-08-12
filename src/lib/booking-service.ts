@@ -554,6 +554,31 @@ export async function confirmBookingPayment(
       }
     }
 
+    // Notify passenger if registered user
+    if (booking.userId) {
+      await tx.notification.create({
+        data: {
+          userId: booking.userId,
+          title: "Payment Confirmed & Pass Ready",
+          message: `Payment of ₹${price} for ${booking.trip.source.name} → ${booking.trip.destination.name} (Seat ${booking.seat?.seatNumber || "N/A"}) is confirmed. Your digital pass is ready!`,
+          category: "PAYMENT",
+        },
+      });
+    }
+
+    // Notify assigned driver if action was performed by admin
+    if (beneficiaryDriverId && beneficiaryDriverId !== actorId) {
+      await tx.notification.create({
+        data: {
+          userId: beneficiaryDriverId,
+          title: "Payment Confirmed by Admin",
+          message: `Payment of ₹${price} for Seat ${booking.seat?.seatNumber || "N/A"} (${booking.trip.source.name} → ${booking.trip.destination.name}) was confirmed by Admin.`,
+          category: "PAYMENT",
+        },
+      });
+    }
+
+
     return tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
   });
 }

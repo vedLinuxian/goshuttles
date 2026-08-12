@@ -89,28 +89,29 @@ export function BookingManagerClient({ bookings, drivers, page, totalPages, tota
   const [cancelReason, setCancelReason] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleRunAction = async () => {
+  const handleRunAction = () => {
     if (!activeModal) return;
     setErrorMessage(null);
 
-    try {
-      if (activeModal.type === "CONFIRM_CASH") {
-        await confirmAdminCashPayment(activeModal.booking.id);
-      } else if (activeModal.type === "CANCEL") {
-        await cancelAdminBooking(activeModal.booking.id, cancelReason || "Cancelled by administrator");
-      } else if (activeModal.type === "NO_SHOW") {
-        await markAdminBookingNoShow(activeModal.booking.id);
-      }
+    startTransition(async () => {
+      try {
+        if (activeModal.type === "CONFIRM_CASH") {
+          await confirmAdminCashPayment(activeModal.booking.id);
+        } else if (activeModal.type === "CANCEL") {
+          await cancelAdminBooking(activeModal.booking.id, cancelReason || "Cancelled by administrator");
+        } else if (activeModal.type === "NO_SHOW") {
+          await markAdminBookingNoShow(activeModal.booking.id);
+        }
 
-      setActiveModal(null);
-      setCancelReason("");
-      startTransition(() => {
+        setActiveModal(null);
+        setCancelReason("");
         router.refresh();
-      });
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Operational request failed. Please try again.");
-    }
+      } catch (err) {
+        setErrorMessage(err instanceof Error ? err.message : "Operational request failed. Please try again.");
+      }
+    });
   };
+
 
   const hasActiveFilters = Boolean(
     filters.status || filters.paymentMode || filters.driverId || filters.tripId || filters.date || filters.q
