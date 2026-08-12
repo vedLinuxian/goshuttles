@@ -87,7 +87,7 @@ export function SearchableSelect({
   };
 
   return (
-    <div className={cn("relative w-full", className)} ref={containerRef}>
+    <div className={cn("relative w-full", open ? "z-40" : "z-10", className)} ref={containerRef}>
       {/* Trigger Button */}
       <button
         type="button"
@@ -131,7 +131,7 @@ export function SearchableSelect({
 
       {/* Popover Dropdown with Centralised Searchbar */}
       {open && (
-        <div className="absolute z-50 mt-1.5 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c101c] p-2 shadow-2xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95">
+        <div className="absolute left-0 right-0 z-[9999] mt-1.5 w-full rounded-2xl border border-slate-700 dark:border-slate-800 bg-slate-950 dark:bg-[#0c101c] p-2.5 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] backdrop-blur-2xl ring-1 ring-amber-500/30 animate-in fade-in-0 zoom-in-95">
           {/* Centralized Search Bar */}
           <div className="relative mb-2 px-1">
             <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />

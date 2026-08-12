@@ -173,7 +173,7 @@ export function AssignVehicleClient({ drivers, vehicles }: AssignVehicleClientPr
       </div>
 
       {/* Interactive Assignment Card */}
-      <Card variant="glass" className="p-6 border-slate-800 shadow-2xl space-y-6 glow-amber">
+      <Card variant="glass" className="p-6 border-slate-800 shadow-2xl space-y-6 glow-amber overflow-visible relative z-30">
         <h2 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
           <Link2 className="h-4 w-4 text-amber-400" /> Link Vehicle to Driver
         </h2>
