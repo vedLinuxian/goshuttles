@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Role } from "@/generated/prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { hash } from "bcryptjs";
 
 const userIdSchema = z.string().uuid();
 const assignableRoleSchema = z.enum(["CUSTOMER", "DRIVER"]);
