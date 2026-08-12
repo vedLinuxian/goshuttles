@@ -425,11 +425,19 @@ export async function updateUserProfileAndSecurityAction(input: {
         try {
           const ctx = await getPasswordContext();
           const betterAuthHash = await ctx.password.hash(newPassword.trim());
-          await tx.account.upsert({
-            where: { userId_providerId: { userId, providerId: "credential" } },
-            create: { userId, providerId: "credential", accountId: userId, password: betterAuthHash },
-            update: { password: betterAuthHash },
+          const existingAcc = await tx.account.findFirst({
+            where: { userId, providerId: "credential" },
           });
+          if (existingAcc) {
+            await tx.account.update({
+              where: { id: existingAcc.id },
+              data: { password: betterAuthHash },
+            });
+          } else {
+            await tx.account.create({
+              data: { userId, providerId: "credential", accountId: userId, password: betterAuthHash },
+            });
+          }
         } catch {
           // Fallback
         }
